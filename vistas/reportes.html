@@ -1,0 +1,122 @@
+<header class="header">
+    <h1 class="header-title">Reportes de Ventas y Ganancias</h1>
+    <div class="header-actions">
+        <!-- Filtros de fecha podrían ir aquí en el futuro -->
+    </div>
+</header>
+
+<div class="content-area" id="reportes-content">
+    <div class="report-grid">
+        <!-- Reporte Diario -->
+        <div class="report-card" id="reporte-diario">
+            <h2 class="report-card-title">Reporte del Día</h2>
+            <div class="report-card-body">
+                <div class="report-summary-grid">
+                    <div class="summary-item">
+                        <span class="summary-label">Ventas Totales (USD)</span>
+                        <span class="summary-value" id="diario-total-usd">$0.00</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Ventas Totales (BS)</span>
+                        <span class="summary-value" id="diario-total-bs">Bs 0.00</span>
+                    </div>
+                    <div class="summary-item profit">
+                        <span class="summary-label">Ganancia Estimada (USD)</span>
+                        <span class="summary-value" id="diario-total-ganancia">$0.00</span>
+                    </div>
+                </div>
+                <h3 class="report-breakdown-title">Desglose por Método de Pago</h3>
+                <div class="chart-container">
+                    <canvas id="diario-chart"></canvas>
+                </div>
+                <div class="report-breakdown-table" id="diario-metodos-pago">
+                    <p class="loading-text">Calculando...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reporte Semanal -->
+        <div class="report-card" id="reporte-semanal">
+            <h2 class="report-card-title">Reporte de la Semana</h2>
+            <div class="report-card-body">
+                <div class="report-summary-grid">
+                    <div class="summary-item">
+                        <span class="summary-label">Ventas Totales (USD)</span>
+                        <span class="summary-value" id="semanal-total-usd">$0.00</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Ventas Totales (BS)</span>
+                        <span class="summary-value" id="semanal-total-bs">Bs 0.00</span>
+                    </div>
+                    <div class="summary-item profit">
+                        <span class="summary-label">Ganancia Estimada (USD)</span>
+                        <span class="summary-value" id="semanal-total-ganancia">$0.00</span>
+                    </div>
+                </div>
+                <h3 class="report-breakdown-title">Desglose por Método de Pago</h3>
+                <div class="chart-container">
+                    <canvas id="semanal-chart"></canvas>
+                </div>
+                <div class="report-breakdown-table" id="semanal-metodos-pago">
+                    <p class="loading-text">Calculando...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reporte Mensual -->
+        <div class="report-card" id="reporte-mensual">
+            <h2 class="report-card-title">Reporte del Mes</h2>
+            <div class="report-card-body">
+                <div class="report-summary-grid">
+                    <div class="summary-item">
+                        <span class="summary-label">Ventas Totales (USD)</span>
+                        <span class="summary-value" id="mensual-total-usd">$0.00</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Ventas Totales (BS)</span>
+                        <span class="summary-value" id="mensual-total-bs">Bs 0.00</span>
+                    </div>
+                    <div class="summary-item profit">
+                        <span class="summary-label">Ganancia Estimada (USD)</span>
+                        <span class="summary-value" id="mensual-total-ganancia">$0.00</span>
+                    </div>
+                </div>
+                <h3 class="report-breakdown-title">Desglose por Método de Pago</h3>
+                <div class="chart-container">
+                    <canvas id="mensual-chart"></canvas>
+                </div>
+                <div class="report-breakdown-table" id="mensual-metodos-pago">
+                    <p class="loading-text">Calculando...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reporte Anual -->
+        <div class="report-card" id="reporte-anual">
+            <h2 class="report-card-title">Reporte del Año</h2>
+            <div class="report-card-body">
+                <div class="report-summary-grid">
+                    <div class="summary-item">
+                        <span class="summary-label">Ventas Totales (USD)</span>
+                        <span class="summary-value" id="anual-total-usd">$0.00</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Ventas Totales (BS)</span>
+                        <span class="summary-value" id="anual-total-bs">Bs 0.00</span>
+                    </div>
+                    <div class="summary-item profit">
+                        <span class="summary-label">Ganancia Estimada (USD)</span>
+                        <span class="summary-value" id="anual-total-ganancia">$0.00</span>
+                    </div>
+                </div>
+                <h3 class="report-breakdown-title">Desglose por Método de Pago</h3>
+                <div class="chart-container">
+                    <canvas id="anual-chart"></canvas>
+                </div>
+                <div class="report-breakdown-table" id="anual-metodos-pago">
+                    <p class="loading-text">Calculando...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

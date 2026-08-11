@@ -1,0 +1,69 @@
+<div class="content-area">
+    <header>
+        <h1 class="header-title">Ajustes del Sistema</h1>
+    </header>
+
+    <div class="settings-card">
+      <h3 class="settings-card-title">Configuración de Tasa de Cambio</h3>
+      
+      <div class="setting-item">
+        <div class="setting-label">
+          <h4>Tasa Oficial (BCV)</h4>
+          <p>Elige si la tasa se obtiene automáticamente de internet o si la introduces manualmente.</p>
+        </div>
+        <div class="setting-control">
+          <span>Automático</span>
+          <label class="switch">
+            <input type="checkbox" id="tasaOficialModo">
+            <span class="slider round"></span>
+          </label>
+          <span>Manual</span>
+        </div>
+      </div>
+      <div class="manual-rate-container" id="manualOficialRateContainer">
+        <label for="manualOficialRate">Valor Manual Tasa Oficial</label>
+        <input type="number" id="manualOficialRate" step="0.01" placeholder="Ej: 36.50">
+      </div>
+    
+      <div class="setting-item">
+        <div class="setting-label">
+          <h4>Tasa Paralelo</h4>
+          <p>Elige si la tasa se obtiene automáticamente de internet o si la introduces manualmente.</p>
+        </div>
+        <div class="setting-control">
+          <span>Automático</span>
+          <label class="switch">
+            <input type="checkbox" id="tasaParaleloModo">
+            <span class="slider round"></span>
+          </label>
+          <span>Manual</span>
+        </div>
+      </div>
+      <div class="manual-rate-container" id="manualParaleloRateContainer">
+        <label for="manualParaleloRate">Valor Manual Tasa Paralelo</label>
+        <input type="number" id="manualParaleloRate" step="0.01" placeholder="Ej: 38.20">
+      </div>
+    
+      <div class="settings-footer">
+        <button id="guardarAjustesTasa" class="action-btn btn-green">Guardar Ajustes</button>
+      </div>
+    </div>
+
+    <div class="settings-card" style="margin-top: 20px;">
+      <h3 class="settings-card-title">Apariencia</h3>
+      <div class="setting-item">
+          <div class="setting-label">
+              <h4>Tema de la Aplicación</h4>
+              <p>Elige entre el tema claro y el oscuro para la interfaz.</p>
+          </div>
+          <div class="setting-control">
+              <span>Oscuro</span>
+              <label class="switch">
+                  <input type="checkbox" id="themeSwitch">
+                  <span class="slider round"></span>
+              </label>
+              <span>Claro</span>
+          </div>
+      </div>
+    </div>
+</div>

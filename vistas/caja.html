@@ -1,0 +1,53 @@
+<header class="header">
+    <h1 class="header-title">Caja / Punto de Venta</h1>
+    <div class="header-actions caja-actions">
+        <button class="action-btn btn-blue" data-modal-target="modalAdicional">Producto Adicional</button>
+        <button class="action-btn btn-yellow" id="btnCajaLimpiar">Limpiar Caja</button>
+        <button class="action-btn btn-green" id="btnCajaVender">Vender</button>
+        <input type="text" id="cajaProductSearch" placeholder="Buscar producto por nombre o código...">
+    </div>
+</header>
+
+<div class="content-area caja-accordion-layout">
+
+    <!-- Acordeón de Productos Disponibles -->
+    <div class="accordion-item">
+        <button class="accordion-header">
+            <span>Productos Disponibles</span>
+            <span class="accordion-icon">▼</span>
+        </button>
+        <div class="accordion-content">
+            <div id="cajaProductosDisponibles">
+                <!-- Los productos se renderizan aquí -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Acordeón de Productos para Llevar (Carrito) -->
+    <div class="accordion-item">
+        <button class="accordion-header">
+            <span>Productos para Llevar</span>
+            <span class="accordion-icon">▼</span>
+        </button>
+        <div class="accordion-content">
+            <div id="cajaProductosParaLlevar" class="caja-cards-container-list">
+                <!-- Los productos del carrito se renderizan aquí -->
+            </div>
+            <div class="caja-totals-container">
+                <div class="total-item">
+                    <span class="total-label">Artículos:</span>
+                    <span class="total-value" id="cajaTotalArticulos">0</span>
+                </div>
+                <div class="total-item">
+                    <span class="total-label">Total $:</span>
+                    <span class="total-value" id="cajaTotalBcv">$ 0.00</span>
+                </div>
+                <div class="total-item">
+                    <span class="total-label">Total Bs:</span>
+                    <span class="total-value" id="cajaTotalBcvBs">Bs 0.00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>

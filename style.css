@@ -1,0 +1,1621 @@
+/* ==========================================================================
+   1. VARIABLES GLOBALES Y RESETEO DE ESTILOS
+   ========================================================================== */
+:root {
+    --bg-main: #111111;
+    --bg-card: #242424;
+    --bg-card2: #0a0a0a;
+    --bg-input: #1a1a1a;
+    --border-color: #636363;
+    --text-primary: #f8fafc;
+    --text-muted: #94a3b8;
+
+    --btn-blue: #2563eb;
+    --btn-green: #16a34a;
+    --btn-orange: #ea580c;
+    --btn-red: #dc2626;
+    --btn-purple: #9333ea;
+    --btn-yellow: #eab308;
+    --btn-edit-text: #1e293b;
+
+    --bg-hover: rgba(255, 255, 255, 0.04);
+    --shadow-color: rgba(0, 0, 0, 0.5);
+    --nav-btn-hover-bg: #262626;
+    --nav-btn-hover-border: #888;
+    --cat-item-hover-bg: #2c2c2c;
+    --cat-item-selected-bg: #333333;
+    --header-hover-bg: #1f1f1f;
+    --date-header-hover-bg: #333;
+    --switch-slider-bg: #333;
+}
+
+html[data-theme="light"] {
+    --bg-main: #f0f2f5;
+    --bg-card: #ffffff;
+    --bg-card2: #f8f9fa;
+    --bg-input: #e9ecef;
+    --border-color: #dee2e6;
+    --text-primary: #212529;
+    --text-muted: #6c757d;
+    --btn-edit-text: #000000;
+    --bg-hover: rgba(0, 0, 0, 0.03);
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --nav-btn-hover-bg: #e9ecef;
+    --nav-btn-hover-border: #adb5bd;
+    --cat-item-hover-bg: #e9ecef;
+    --cat-item-selected-bg: #dee2e6;
+    --header-hover-bg: #f1f3f5;
+    --date-header-hover-bg: #f1f3f5;
+    --switch-slider-bg: #ccc;
+}
+
+* { 
+    box-sizing: border-box; 
+    margin: 0; 
+    padding: 0; 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.product-card-value {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: break-word;
+    white-space: normal;
+    min-width: 0; /* Solución clave para que el contenido se ajuste en flex/grid */
+    background-color: var(--bg-input);
+    padding: 6px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 0.78rem;
+}
+
+body { 
+    background-color: var(--bg-main); 
+    color: var(--text-primary); 
+    display: flex; 
+    height: 100vh; 
+    overflow: hidden; 
+}
+
+/* ==========================================================================
+   SPINNERS EN INPUTS NUMÉRICOS
+   ========================================================================== */
+input[type=number]:not(.caja-input-cant)::-webkit-inner-spin-button, 
+input[type=number]:not(.caja-input-cant)::-webkit-outer-spin-button { 
+    -webkit-appearance: none;
+    margin: 0; 
+}
+
+input[type=number]:not(.caja-input-cant) {
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+
+.caja-input-cant[type=number]::-webkit-inner-spin-button,
+.caja-input-cant[type=number]::-webkit-outer-spin-button {
+    opacity: 0.8;
+}
+
+/* ==========================================================================
+   2. BARRA LATERAL (SIDEBAR)
+   ========================================================================== */
+aside { 
+    width: 240px;
+    flex-shrink: 0;
+    background-color: var(--bg-card2);
+    border-right: 1px solid var(--border-color); 
+    display: flex; 
+    flex-direction: column; 
+    padding: 20px;
+    transition: transform 0.3s ease-in-out;
+}
+
+.sidebar-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 8px;
+    margin-bottom: 25px;
+    width: 100%;
+}
+
+.sidebar-brand img {
+    width: 130px; 
+    height: auto;
+    margin: 0 auto;
+    display: block;
+    transition: transform 0.3s ease;
+}
+
+.sidebar-brand img:hover { transform: scale(1.05); }
+
+.sidebar-brand h2 {
+    text-align: center;
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1.3rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+.sidebar-menu { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 12px;
+    flex: 1;
+    overflow-y: auto; /* Permite el scroll si los botones no caben */
+    overflow-x: visible; /* Permite que el botón desplazado no se corte */
+    padding-right: 8px; /* Espacio extra para el desplazamiento horizontal */
+}
+
+.nav-btn {
+    position: relative;
+    z-index: 1;
+    background-color: var(--bg-main); 
+    color: var(--text-primary); 
+    border: 1px solid var(--border-color); 
+    padding: 14px; 
+    border-radius: 8px; 
+    font-size: 0.95rem; 
+    font-weight: 600; 
+    cursor: pointer; 
+    text-transform: lowercase;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); 
+}
+
+.nav-btn:hover { 
+    background-color: var(--nav-btn-hover-bg);
+    border-color: var(--nav-btn-hover-border);
+    transform: translateX(4px);
+}
+
+.nav-btn.active { 
+    background-color: var(--btn-red); 
+    border-color: var(--btn-red); 
+    color: white;
+    transform: translateX(4px);
+}
+
+.user-panel { 
+    border-top: 1px solid var(--border-color); 
+    padding-top: 15px; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 10px; 
+}
+
+.user-info { font-size: 0.85rem; color: var(--text-muted); text-align: center; }
+.user-name { color: var(--btn-green); font-weight: bold; }
+
+.btn-logout { 
+    background-color: var(--btn-red); 
+    color: white; 
+    border: none; 
+    padding: 10px; 
+    border-radius: 6px; 
+    cursor: pointer; 
+    font-weight: 600; 
+    transition: all 0.2s ease; 
+}
+
+.btn-logout:hover { opacity: 0.85; transform: translateY(-1px); }
+
+/* ==========================================================================
+   3. ESTRUCTURA PRINCIPAL Y HEADER
+   ========================================================================== */
+.main-wrapper { 
+    flex: 1; 
+    display: flex; 
+    flex-direction: column; 
+    height: 100vh; 
+    flex-grow: 1;
+    overflow: hidden; 
+    position: relative; /* Para el posicionamiento del botón de menú en vistas sin header */
+}
+
+header { 
+    background-color: var(--bg-main); 
+    padding: 15px 20px; 
+    border-bottom: 1px solid var(--border-color); 
+    display: flex; 
+    flex-direction: column; 
+    gap: 15px; 
+}
+
+.sidebar-toggle-btn {
+    display: none; /* Oculto en escritorio por defecto */
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 5px 10px;
+    margin-right: 10px;
+    border-radius: 6px;
+}
+
+.sidebar-toggle-btn:hover {
+    background-color: var(--bg-hover);
+}
+
+/* Posicionamiento especial para el botón de menú cuando no está en un header */
+#visor-modulos > .sidebar-toggle-btn {
+    position: absolute;
+    top: 15px;
+    left: 20px;
+    z-index: 10;
+}
+
+.header-title { 
+    font-size: 1.2rem; 
+    font-weight: 600; 
+    color: var(--text-primary); 
+    text-transform: uppercase; 
+}
+
+.header-actions { 
+    display: flex; 
+    gap: 12px; 
+    width: 100%; 
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.action-btn { 
+    color: white; 
+    border: none; 
+    padding: 10px 16px; 
+    border-radius: 6px; 
+    font-weight: 600; 
+    font-size: 0.9rem; 
+    cursor: pointer; 
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
+    text-transform: lowercase;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.action-btn:hover { 
+    opacity: 0.9; 
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px var(--shadow-color);
+}
+
+.btn-cat { background-color: var(--btn-blue); } 
+.btn-add { background-color: var(--btn-green); }
+.btn-del { background-color: var(--btn-red); }
+.btn-edit { background-color: var(--btn-yellow); color: var(--btn-edit-text); }
+.btn-yellow { background-color: var(--btn-yellow); color: var(--btn-edit-text); }
+.btn-orange { background-color: var(--btn-orange); }
+.btn-blue { background-color: var(--btn-blue); }
+.btn-edit.guardar-activo { background-color: var(--btn-blue); color: white; } 
+.btn-pdf {
+    background-color: var(--btn-purple);
+    color: white;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+    border: none;
+    font-weight: 600;
+}
+.btn-pdf:hover { opacity: 0.85; }
+.btn-edit-venta {
+    background-color: var(--btn-yellow);
+    color: #1e293b;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+    border: none;
+    font-weight: 600;
+    margin-left: 4px;
+}
+.btn-edit-venta:hover { opacity: 0.85; }
+
+.btn-delete-venta {
+    /* Anula el padding grande de .action-btn para que coincida con los otros botones de acción de la tabla */
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    margin-left: 4px;
+    text-transform: none; /* Anula el 'lowercase' de .action-btn */
+}
+
+.header-actions #productSearch,
+.header-actions #ventasSearch,
+.header-actions #devolucionVentaSearch,
+.header-actions #cajaProductSearch {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.2s ease;
+    width: 280px; /* Ancho unificado para los buscadores */
+}
+
+.header-actions #productSearch::placeholder,
+.header-actions #ventasSearch::placeholder,
+.header-actions #devolucionVentaSearch::placeholder,
+.header-actions #cajaProductSearch::placeholder { color: var(--text-muted); }
+.header-actions #productSearch:focus,
+.header-actions #ventasSearch:focus,
+.header-actions #devolucionVentaSearch:focus,
+.header-actions #cajaProductSearch:focus { border-color: var(--btn-blue); }
+
+.content-area { 
+    flex: 1; 
+    padding: 20px; 
+    overflow-y: auto; 
+}
+
+/* NUEVO: Asegura que no haya un margen superior extra en el contenido de las vistas */
+.content-area > *:first-child {
+    margin-top: 0 !important;
+}
+
+/* ==========================================================================
+   15. DISEÑO RESPONSIVO
+   ========================================================================== */
+
+.content-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+}
+
+/* Para tablets y dispositivos móviles */
+@media (max-width: 1024px) {
+    .sidebar-toggle-btn {
+        display: block; /* Muestra el botón de menú */
+    }
+
+    header {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    aside {
+        position: absolute;
+        height: 100%;
+        z-index: 1000;
+        transform: translateX(-100%); /* Oculta por defecto en móvil */
+    }
+
+    body.sidebar-visible aside {
+        transform: translateX(0); /* Muestra la barra lateral */
+    }
+
+    body.sidebar-visible .content-overlay {
+        display: block; /* Muestra el overlay oscuro */
+    }
+
+    /* --- INICIO: Ajustes para la tabla de Ventas en móvil/tablet --- */
+    .venta-date-content {
+        overflow-x: auto; /* Permite el desplazamiento horizontal dentro de cada sección de día */
+        -webkit-overflow-scrolling: touch; /* Desplazamiento suave en iOS */
+    }
+    .tabla-ventas-container {
+        min-width: 950px; /* Ancho mínimo para forzar el scroll y mantener las columnas legibles */
+        overflow: visible; /* Anula el 'overflow: hidden' para que el scroll funcione */
+    }
+    /* --- FIN: Ajustes para la tabla de Ventas en móvil/tablet --- */
+
+    /* En la vista de inventario, apila las acciones del header */
+    .header-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        flex-basis: 100%; /* Ocupa todo el ancho */
+    }
+
+    /* Específico para la vista de Caja: 3 botones arriba, buscador abajo */
+    .caja-actions {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+    }
+
+    .caja-actions #cajaProductSearch {
+        grid-column: 1 / -1; /* Ocupa toda la fila de abajo */
+    }
+
+    /* Para que los botones y buscadores en el header móvil sean uniformes */
+    .header-actions .action-btn,
+    .header-actions input[type="text"] {
+        width: 100%;
+        justify-content: center;
+        height: 44px; /* Altura uniforme para que se vean parejos */
+        font-size: 0.8rem; /* Reducir fuente para que quepa el texto */
+        padding: 10px 8px;
+    }
+
+    .header-actions .action-btn {
+        white-space: nowrap; /* Evita que el texto del botón se parta en dos líneas */
+    }
+
+    /* Específico para la vista de Inventario: buscador a todo lo ancho */
+    .header-actions #productSearch {
+        grid-column: 1 / -1;
+    }
+}
+
+/* Para dispositivos móviles más pequeños */
+@media (max-width: 768px) {
+    /* --- INICIO: Ajustes para la vista de Reportes en móvil --- */
+    .report-grid {
+        grid-template-columns: 1fr; /* Apila las tarjetas de reporte verticalmente */
+    }
+    .summary-value {
+        font-size: 1.3rem; /* Reduce el tamaño de la fuente de los totales */
+    }
+    .breakdown-table td, .breakdown-table th {
+        padding: 8px 6px; /* Reduce el padding en las tablas de desglose */
+        font-size: 0.8rem; /* Reduce la fuente de la tabla */
+    }
+    /* --- FIN: Ajustes para la vista de Reportes en móvil --- */
+
+    /* --- INICIO: Ajustes para botones de acción en tabla de Ventas móvil --- */
+    .venta-acciones {
+        display: flex;
+        flex-direction: row; /* Asegura la disposición horizontal */
+        gap: 5px; /* Espacio consistente entre botones */
+        align-items: center;
+        justify-content: center;
+        padding: 8px; /* Padding reducido para dar más espacio a los botones */
+    }
+
+    .venta-acciones button {
+        flex-grow: 1; /* Permite que los botones crezcan si hay espacio */
+        flex-basis: 0; /* Base para que flex-grow funcione bien */
+        margin-left: 0 !important;
+        padding: 8px 6px; /* Padding vertical y horizontal ajustado */
+        font-size: 0.75rem; /* Fuente más pequeña para que quepa el texto */
+        white-space: nowrap; /* Evita que el texto del botón se parta */
+    }
+    /* --- FIN: Ajustes para botones de acción en tabla de Ventas móvil --- */
+}
+
+/* ==========================================================================
+   4. TARJETAS DE PRODUCTOS EN INVENTARIO
+   ========================================================================== */
+.category-box {
+    background-color: var(--bg-input);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 25px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 100%;
+}
+
+.category-box-title {
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: var(--text-primary);
+    text-align: center;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 8px;
+}
+
+.products-grid { 
+    display: grid; 
+    grid-template-columns: repeat(4, 1fr); 
+    gap: 12px; 
+    width: 100%;
+}
+
+@media (max-width: 1400px) { .products-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 1024px) { .products-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 768px) { .products-grid { grid-template-columns: 1fr; } }
+
+.product-card { 
+    background-color: var(--bg-card); 
+    border: 1px solid var(--border-color); 
+    border-radius: 8px; 
+    padding: 10px; 
+    display: grid; 
+    grid-template-columns: 1fr 1fr; 
+    gap: 8px; 
+    cursor: pointer; 
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); 
+    width: 100%;
+    box-sizing: border-box;
+    align-self: start;
+}
+
+.product-card:hover { border-color: #999; transform: translateY(-2px); }
+.product-card.selected { border-color: var(--btn-yellow) !important; box-shadow: 0 0 10px rgba(234, 179, 8, 0.3); }
+.product-card.selected input { border-color: var(--btn-yellow) !important; }
+.product-col {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    justify-content: flex-start;
+}
+
+.field-group { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 2px; 
+    min-width: 0; 
+}
+
+.field-group label { 
+    font-size: 0.66rem; 
+    color: var(--text-muted); 
+    font-weight: 600; 
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    text-transform: lowercase;
+}
+
+.field-group input, input, select, textarea { 
+    background-color: var(--bg-input) !important; 
+    border: 1px solid var(--border-color) !important; 
+    border-radius: 4px; 
+    color: var(--text-primary) !important; 
+    padding: 5px 6px; 
+    font-size: 0.8rem; 
+    outline: none; 
+    text-align: center; 
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease;
+}
+
+.field-group input:focus, select:focus, textarea:focus { border-color: #999 !important; }
+
+/* ==========================================================================
+   5. VISTA DE CAJA
+   ========================================================================== */
+.caja-accordion-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.accordion-item {
+    background-color: var(--bg-card2);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.accordion-header {
+    background-color: transparent;
+    border: none;
+    border-bottom: 1px solid transparent; /* Borde dinámico */
+    width: 100%;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    transition: background-color 0.2s ease;
+}
+
+.accordion-header:hover {
+    background-color: var(--bg-hover);
+}
+
+.accordion-header .accordion-icon {
+    font-size: 1rem;
+    transition: transform 0.2s ease;
+}
+
+.accordion-content {
+    padding: 15px;
+    border-top: 1px solid var(--border-color);
+    display: none; /* Oculto por defecto */
+}
+
+/* Scroll para la lista de productos disponibles */
+#cajaProductosDisponibles { /* Ahora contendrá cajas de categoría */
+    max-height: 55vh;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+/* Contenedor para las tarjetas en formato de lista */
+.caja-cards-container-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Tarjeta de producto individual en la lista de caja */
+.product-card-caja-list {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background-color: var(--bg-card);
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.caja-list-info {
+    flex: 1;
+    min-width: 0; /* Para que el flex-item se encoja correctamente */
+}
+
+.caja-list-nombre {
+    display: block;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    margin-bottom: 2px;
+    white-space: normal; /* Permite que el texto pase a la siguiente línea */
+    word-break: break-word; /* Rompe palabras largas si es necesario */
+    line-height: 1.3; /* Mejora la legibilidad del texto en varias líneas */
+}
+
+.caja-list-codigo {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-family: monospace;
+}
+.caja-list-codigo strong {
+    color: var(--btn-green);
+}
+
+.caja-list-details {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.caja-list-item {
+    text-align: center;
+    min-width: 60px;
+}
+
+.caja-list-item label {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.caja-list-item span {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.caja-list-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ==========================================================================
+   5.2. VISTA DE CAJA - CATEGORIZACIÓN Y GRID PARA PRODUCTOS DISPONIBLES
+   ========================================================================== */
+.caja-category-box {
+    background-color: var(--bg-card); /* Fondo para la caja de categoría */
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 100%;
+    margin-bottom: 20px; /* Reemplaza el 'gap' del contenedor flex eliminado para evitar congelamiento */
+}
+
+.caja-category-box-title {
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: var(--text-primary);
+    text-align: center;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 8px;
+}
+
+.caja-products-grid {
+    display: grid;
+    /* Se cambia a un grid explícito para evitar posibles bucles de renderizado que congelan la aplicación. */
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    width: 100%;
+}
+
+/* Media queries para hacer el grid de caja responsivo, similar al de inventario */
+@media (max-width: 1400px) { .caja-products-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 1024px) { .caja-products-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 768px) { .caja-products-grid { grid-template-columns: 1fr; } }
+
+.caja-totals-container {
+    background-color: var(--bg-card2);
+    border-top: 2px solid var(--border-color);
+    padding: 12px 15px;
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: center;
+}
+
+/* ==========================================================================
+   5.1. VISTA DE CAJA - LAYOUT VERTICAL PARA PRODUCTOS DISPONIBLES
+   ========================================================================== */
+.product-card-caja-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background-color: var(--bg-card);
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.caja-v-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.caja-v-item label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.caja-v-item span {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    background-color: var(--bg-input);
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    width: 100%;
+    word-break: break-word;
+}
+
+.caja-v-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.caja-v-actions > label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-weight: 600;
+    text-align: center;
+}
+
+.quantity-control {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.quantity-btn {
+    background-color: var(--btn-blue);
+    color: white;
+    border: none;
+    width: 40px;
+    height: 40px;
+    font-size: 1.6rem;
+    font-weight: bold;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    padding-bottom: 4px; /* Ajuste para centrar visualmente el símbolo */
+}
+
+.quantity-control .caja-input-cant {
+    width: 75px;
+    height: 40px;
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+/* ==========================================================================
+   6.1. VISTA DE VENTAS - ACORDEÓN POR FECHA================================= */
+.venta-month-group {
+    background-color: var(--bg-card2);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    margin-bottom: 20px;
+    overflow: hidden;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.venta-month-header {
+    display: flex;
+    align-items: center;
+    padding: 15px 20px;
+    cursor: pointer;
+    background-color: var(--bg-card2);
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s ease;
+}
+
+.venta-month-header:hover {
+    background-color: var(--header-hover-bg);
+}
+
+.venta-month-header .fecha-titulo {
+    flex: 1;
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: var(--btn-yellow);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.venta-month-header .fecha-resumen {
+    gap: 25px;
+    font-size: 0.95rem;
+}
+
+.venta-month-header .fecha-icono {
+    font-size: 1.1rem;
+    transition: transform 0.3s ease;
+}
+
+.venta-month-header.active .fecha-icono { transform: rotate(180deg); }
+
+.venta-month-content {
+    padding: 15px 15px 1px 15px;
+    background-color: transparent;
+    border-top: 1px solid var(--border-color);
+}
+
+.venta-date-group {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 15px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.venta-date-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    cursor: pointer;
+    background-color: transparent;
+}
+
+.venta-date-header:hover {
+    background-color: var(--date-header-hover-bg);
+}
+.fecha-titulo {
+    flex: 1;
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: var(--text-primary);
+    text-transform: capitalize;
+}
+
+.fecha-resumen {
+    display: flex;
+    gap: 20px;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-right: 20px;
+}
+
+.fecha-resumen span {
+    font-weight: 600;
+}
+
+.fecha-icono {
+    font-size: 1rem;
+    font-weight: bold;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+}
+
+.venta-date-header.active .fecha-icono { transform: rotate(180deg); }
+.venta-date-content { padding: 0; background-color: var(--bg-card); border-top: 1px solid var(--border-color); }
+.venta-date-content .tabla-ventas-container { border: none; border-radius: 0; margin: 0; padding: 0; width: 100%; }
+
+/* ==========================================================================
+   6.2. VISTA DE DEVOLUCIONES
+   ========================================================================== */
+.venta-info-header {
+    background-color: var(--bg-card);
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border: 1px solid var(--border-color);
+}
+.venta-info-header h3 {
+    color: var(--btn-yellow);
+    margin-bottom: 5px;
+}
+.venta-info-header p {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.devolucion-items-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.devolucion-item-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.devolucion-item-card.disabled {
+    opacity: 0.6;
+    background-color: var(--bg-input);
+}
+
+.item-info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 15px;
+}
+.item-info strong { font-size: 1rem; color: var(--text-primary); }
+.item-info span { font-size: 0.8rem; color: var(--text-muted); background: var(--bg-input); padding: 3px 6px; border-radius: 4px; }
+
+.item-actions {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+}
+.item-actions .field-group { margin-bottom: 0; }
+.item-actions .action-btn { height: 38px; white-space: nowrap; }
+
+.item-status p {
+    font-style: italic;
+    color: var(--btn-green);
+    font-weight: 600;
+}
+
+#historialDevolucionesContent { display: flex; flex-direction: column; gap: 8px; }
+.historial-devolucion-item {
+    background-color: var(--bg-card);
+    padding: 10px 15px;
+    border-radius: 6px;
+    border-left: 4px solid var(--btn-orange);
+}
+.historial-info { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+.historial-fecha { font-size: 0.75rem; color: var(--text-muted); }
+.historial-info strong {
+    font-size: 0.9rem;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    min-width: 0; /* Permite que el elemento flex se encoja y envuelva el texto */
+}
+.historial-venta-id { font-size: 0.8rem; color: var(--btn-yellow); font-family: monospace; }
+.historial-motivo {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    margin-top: 5px;
+    padding-left: 10px;
+    border-left: 2px solid var(--border-color);
+    overflow-wrap: break-word;
+    word-break: break-word;
+    white-space: normal;
+}
+
+
+/* ==========================================================================
+   6. VISTA DE VENTAS (TABLA HISTORIAL)
+   ========================================================================== */
+.tabla-ventas-container {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.tabla-ventas-container th, 
+.tabla-ventas-container td {
+    padding: 12px 15px;
+    text-align: left;
+    font-size: 0.85rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tabla-ventas-container th:last-child,
+.tabla-ventas-container td:last-child {
+    text-align: center;
+}
+
+.tabla-ventas-container th {
+    background-color: var(--bg-card2);
+    color: var(--text-primary);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+}
+
+.tabla-ventas-container tr:hover td {
+    background-color: var(--bg-hover);
+}
+
+.detalle-venta-badge {
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    display: inline-block;
+    margin: 2px 0;
+}
+
+/* ==========================================================================
+   7. FOOTER DE TOTALES
+   ========================================================================== */
+footer { 
+    background-color: var(--bg-card); 
+    border-top: 1px solid var(--border-color); 
+    padding: 12px 20px; 
+    display: flex; 
+    gap: 30px; 
+    align-items: center; 
+}
+
+.total-item { display: flex; gap: 8px; align-items: center; font-size: 0.9rem; }
+.total-label { color: var(--text-muted); text-transform: lowercase; }
+.total-value { font-weight: bold; color: var(--text-primary); font-size: 1.05rem; }
+
+/* ==========================================================================
+   8. LOGIN
+   ========================================================================== */
+.login-page { display: flex; justify-content: center; align-items: center; height: 100vh; background-color: var(--bg-main); }
+.login-wrapper { width: 100%; max-width: 380px; padding: 20px; }
+.login-box {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 30px 25px;
+    text-align: center;    box-shadow: 0 10px 25px var(--shadow-color);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.login-box .logo { width: 110px; height: auto; margin: 0 auto 5px; }
+.login-box h2 { font-size: 1.5rem; font-weight: bold; color: var(--text-primary); letter-spacing: 1px; }
+.login-sub { font-size: 0.85rem; color: var(--text-muted); margin-top: -10px; margin-bottom: 10px; }
+.login-input-group { display: flex; flex-direction: column; gap: 15px; }
+.login-box button {
+    background-color: var(--btn-green);
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 10px;
+}
+
+.login-box button:hover:not(:disabled) {
+    opacity: 0.9;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px var(--shadow-color);
+}
+
+.login-box button:disabled {
+    background-color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+/* ==========================================================================
+   9. MODALES Y FACTURACIÓN
+   ========================================================================== */
+.modal-overlay { 
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100vw; 
+    height: 100vh; 
+    background: rgba(0, 0, 0, 0.75); 
+    backdrop-filter: blur(5px);
+    display: none; 
+    justify-content: center; 
+    align-items: center; 
+    z-index: 2000; 
+}
+
+.modal-overlay.active { display: flex; }
+
+.modal-container, .modal {
+    background-color: var(--bg-card); 
+    border: 1px solid var(--border-color); 
+    padding: 24px;
+    border-radius: 12px; 
+    width: 100%; 
+    max-width: 480px; 
+    max-height: 90vh;
+    overflow-y: auto;
+    display: flex; 
+    flex-direction: column; 
+    gap: 16px;
+    position: relative;
+    box-shadow: 0 20px 25px -5px var(--shadow-color);
+    animation: scaleUpModal 0.25s ease forwards;
+}
+
+@keyframes scaleUpModal {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 12px;
+}
+
+.modal-header h3, .modal h3 { font-size: 1.15rem; color: var(--text-primary); font-weight: 600; }
+.modal-body, .modal-form { display: flex; flex-direction: column; gap: 12px; }
+.modal-body label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; }
+.modal-footer, .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
+
+.modal-resumen-pago {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.modal-resumen-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+
+.modal-resumen-row.destacado {
+    font-weight: bold;
+    color: var(--btn-green);
+    border-top: 1px solid var(--border-color);
+    padding-top: 6px;
+    margin-top: 2px;
+}
+
+.modal-tasas-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    background: var(--bg-main);
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px dashed var(--border-color);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.cat-list { 
+    list-style: none; 
+    max-height: 180px; 
+    overflow-y: auto; 
+    border: 1px solid var(--border-color); 
+    border-radius: 8px; 
+    background-color: var(--bg-main); 
+    padding: 6px; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 4px; 
+}
+
+.cat-item { padding: 6px 10px; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; border-radius: 4px; }
+.cat-item:hover { background-color: var(--cat-item-hover-bg); }
+.cat-item.selected { background-color: var(--cat-item-selected-bg); font-weight: bold; color: var(--btn-yellow); border-left: 3px solid var(--btn-yellow); }
+
+.modal-buttons #catBuscar {
+    width: 180px;
+    text-align: left;
+    padding-left: 12px;
+}
+
+.modal-toggle-buttons {
+    display: flex;
+    background-color: var(--bg-input);
+    border-radius: 8px;
+    padding: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.toggle-btn {
+    flex: 1;
+    padding: 8px 12px;
+    border: none;
+    background-color: transparent;
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s ease-in-out;
+}
+
+.toggle-btn.active {
+    background-color: var(--btn-blue);
+    color: white;
+}
+
+/* ==========================================================================
+   10. NOTIFICACIONES Y TOASTS
+   ========================================================================== */
+#toastContainer { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+.toast { padding: 12px 18px; border-radius: 8px; color: white; font-weight: 600; font-size: 0.85rem; box-shadow: 0 6px 20px var(--shadow-color); opacity: 0; transform: translateY(-20px) scale(0.95); animation: slideInToast 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; pointer-events: auto; }
+.toast.success { background-color: var(--btn-green); }
+.toast.error { background-color: var(--btn-red); }
+.toast.info { background-color: var(--btn-blue); }
+.toast.confirm { background-color: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary); }
+.toast-buttons { margin-top: 8px; display: flex; gap: 8px; justify-content: flex-end; }
+.toast.exiting { animation: slideOutToast 0.3s ease forwards; }
+
+@keyframes slideInToast { to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes slideOutToast { to { opacity: 0; transform: translateX(100px); } }
+
+/* ==========================================================================
+   11. PANTALLA DE BIENVENIDA
+   ========================================================================== */
+.welcome-container { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; height: 100%; padding: 20px; gap: 15px; }
+.welcome-logo { width: 180px; height: auto; margin-bottom: 20px; }
+.welcome-container h1 { font-size: 2.5rem; font-weight: bold; color: var(--text-primary); }
+.welcome-container p { font-size: 1.1rem; color: var(--text-muted); max-width: 600px; line-height: 1.6; }
+
+/* ==========================================================================
+   12. WIDGET DE TASAS CAMBIARIAS EN SIDEBAR
+   ========================================================================== */
+.exchange-rates-panel {
+    background-color: var(--bg-card2);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 12px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.exchange-rate-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.82rem;
+}
+
+.exchange-rate-label {
+    color: var(--text-muted);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.exchange-rate-value {
+    color: var(--text-primary);
+    font-weight: 700;
+    font-family: monospace;
+}
+
+.exchange-rate-item.bcv .exchange-rate-value {
+    color: var(--btn-green);
+}
+
+.exchange-rate-item.parallel .exchange-rate-value {
+    color: var(--btn-yellow);
+}
+
+/* ==========================================================================
+   13. VISTA DE REPORTES
+   ========================================================================== */
+.report-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+    gap: 20px;
+}
+
+.report-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-top: 4px solid var(--btn-yellow); /* Borde superior acentuado */
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Asegura que el contenido respete los bordes redondeados */
+}
+
+.report-card-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--btn-yellow);
+    text-transform: uppercase;
+}
+
+.report-card-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.report-summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.summary-item {
+    background-color: var(--bg-input);
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 4px solid var(--border-color);
+}
+
+.summary-item.profit {
+    grid-column: 1 / -1; /* Span full width */
+    border-left-color: var(--btn-green);
+}
+
+.summary-label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.summary-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+.summary-item.profit .summary-value {
+    color: var(--btn-green);
+}
+
+.report-breakdown-title {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 8px;
+    margin-top: 10px;
+}
+
+.report-breakdown-table .loading-text {
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+    padding: 20px 0;
+}
+
+.breakdown-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.breakdown-table th, .breakdown-table td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border-color); }
+.breakdown-table th { font-weight: 600; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; }
+.breakdown-table tr:last-child td { border-bottom: none; }
+.breakdown-table td { font-weight: 600; }
+.breakdown-table td:nth-child(2), .breakdown-table td:nth-child(3) { text-align: right; font-family: monospace; font-size: 0.9rem; }
+
+.chart-container {
+    position: relative;
+    height: 220px;
+    width: 100%;
+}
+
+/* 13.1. VISTA DE REPORTES - FILTROS */
+.report-filter-group {
+    padding: 12px 20px;
+    background-color: var(--bg-card2);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.report-filter-group label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.filter-controls {
+    display: flex;
+    gap: 10px;
+}
+
+.report-selector {
+    flex: 1;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    appearance: none; /* Ocultar flecha por defecto */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.7rem center;
+    background-repeat: no-repeat;
+    background-size: 1.2em 1.2em;
+    padding-right: 2.5rem; /* Espacio para la flecha personalizada */
+}
+
+.report-selector:hover { border-color: var(--btn-blue); }
+.report-selector:focus { border-color: var(--btn-blue); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2); }
+
+/* ==========================================================================
+   14. VISTA DE AJUSTES (NUEVO DISEÑO)
+   ========================================================================== */
+.settings-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    max-width: 800px;
+    margin: 0 auto;
+    overflow: hidden;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.settings-card-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    background-color: var(--bg-card2);
+}
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border-color);
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.setting-label h4 {
+    font-size: 1rem;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.setting-label p {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    max-width: 400px;
+}
+
+.setting-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.switch { position: relative; display: inline-block; width: 50px; height: 28px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--switch-slider-bg); transition: .4s; border-radius: 28px; border: 1px solid var(--border-color); }
+.slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+
+input:checked + .slider { background-color: var(--btn-green); border-color: var(--btn-green); }
+input:checked + .slider:before { transform: translateX(22px); }
+
+.manual-rate-container {
+    padding: 15px 20px;
+    background-color: var(--bg-input);
+    border-bottom: 1px solid var(--border-color);
+    display: none;
+}
+.manual-rate-container label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+    display: block;
+}
+.manual-rate-container input { width: 100%; max-width: 200px; text-align: left; padding-left: 10px; }
+
+.settings-footer {
+    padding: 15px 20px;
+    text-align: right;
+    background-color: var(--bg-card2);
+}
+
+/* Ajustes responsivos específicos para la vista de reportes (móviles) */
+@media (max-width: 480px) {
+    .report-grid { grid-template-columns: 1fr !important; gap: 12px !important; padding: 0 8px; }
+    .report-card { border-radius: 8px; overflow: hidden; max-height: calc(100vh - 120px); }
+    .report-card-title { padding: 10px 12px; font-size: 0.95rem; }
+    .report-card-body { padding: 12px; gap: 12px; }
+
+    .report-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .summary-item { padding: 10px; border-left-width: 3px; border-radius: 6px; }
+    .summary-item.profit { grid-column: 1 / -1; }
+    .summary-label { font-size: 0.72rem; margin-bottom: 6px; }
+    .summary-value { font-size: 1.05rem; font-weight: 700; }
+
+    .chart-container { height: 160px !important; }
+    .breakdown-table th, .breakdown-table td { padding: 6px 6px; font-size: 0.78rem; }
+
+    /* Priorizamos el contenido: quepan más filas en pantalla */
+    .report-card-body { line-height: 1.1; }
+    .report-breakdown-title { font-size: 0.78rem; padding-bottom: 6px; }
+
+    /* Facilitar scroll interno si el contenido excede la vista */
+    .report-card { display: flex; flex-direction: column; }
+    .report-card-body { overflow: auto; max-height: calc(100vh - 200px); }
+}
+
+/* Responsive adjustments for filters */
+@media (max-width: 600px) {
+    .filter-controls { flex-direction: column; }
+}
+
+/* Ajustes extra para pantallas muy pequeñas */
+@media (max-width: 360px) {
+    .report-summary-grid { grid-template-columns: 1fr; }
+    .header-title { font-size: 1rem; }
+    .summary-value { font-size: 1rem; }
+}

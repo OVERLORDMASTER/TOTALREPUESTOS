@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Facturación | Login</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="shortcut icon" href="/imagen/logo.png" type="image/x-icon">
+    <script>
+        // Aplica el tema (claro/oscuro) guardado en localStorage para evitar el parpadeo.
+        // Este script se ejecuta antes de que se renderice el body.
+        const THEME_KEY = 'appTheme';
+        const savedTheme = localStorage.getItem(THEME_KEY) || 'dark';
+        document.documentElement.dataset.theme = savedTheme;
+    </script>
+</head>
+<body class="login-page">
+
+    <div class="login-wrapper">
+        <div class="login-box">
+
+            <img class="logo" src="/imagen/logo.png" alt="">
+
+            <h2>OMEGAPOS</h2>
+            <p class="login-sub">Ingresa tus credenciales para continuar</p>
+
+            <form class="login-input-group" id="loginForm">
+                <div class="field-group" style="text-align: left;">
+                    <label for="loginUser" style="font-size: 0.8rem; color: #666; margin-bottom: 5px;">Usuario</label>
+                    <input type="text" id="loginUser" placeholder="Tu nombre de usuario" autocomplete="off" autofocus required>
+                </div>
+                <div class="field-group" style="text-align: left;">
+                    <label for="loginPass" style="font-size: 0.8rem; color: #666; margin-bottom: 5px;">Contraseña</label>
+                    <input type="password" id="loginPass" placeholder="Tu contraseña" required>
+                </div>
+            </form>
+            
+            <button id="loginBtn">Iniciar Sesión</button>
+
+            <div id="loginMessage" class="message"></div>
+        </div>
+    </div>
+
+    <script>
+        // Verificación de protocolo: Asegura que la página se sirva a través de HTTP.
+        if (window.location.protocol === 'file:') {
+            document.body.innerHTML = `
+                <div class="login-wrapper">
+                    <div class="login-box" style="border-left: 5px solid #dc3545; text-align: left;">
+                        <h2 style="color: #dc3545;">Error de Acceso</h2>
+                        <p class="login-sub">No puedes abrir este archivo directamente. Debes acceder a través del servidor.</p>
+                        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+                        <p>Por favor, inicia el servidor con <code>node server.js</code> y abre <a href="http://localhost:3000">http://localhost:3000</a> en tu navegador.</p>
+                    </div>
+                </div>`;
+        }
+
+        // Si ya hay sesión guardada, redirigir directo al dashboard
+        if (localStorage.getItem('usuario')) {
+            window.location.href = 'dashboard.html';
+        }
+
+        const loginUser = document.getElementById('loginUser');
+        const loginPass = document.getElementById('loginPass');
+        const loginBtn = document.getElementById('loginBtn');
+        const loginMessage = document.getElementById('loginMessage');
+
+        async function intentarLogin() {
+            const username = loginUser.value.trim();
+            const password = loginPass.value.trim();
+
+            if (!username || !password) {
+                loginMessage.textContent = '❌ Completa todos los campos.';
+                loginMessage.className = 'message error';
+                loginMessage.style.display = 'block';
+                return;
+            }
+
+            const originalButtonText = loginBtn.textContent;
+            loginBtn.textContent = 'Verificando...';
+            loginBtn.disabled = true;
+            loginUser.disabled = true;
+            loginPass.disabled = true;
+            loginMessage.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    loginMessage.textContent = '✅ ' + (data.message || "Acceso concedido") + '. Redirigiendo...';
+                    loginMessage.className = 'message success';
+                    loginMessage.style.display = 'block';
+
+                    // Guardar la sesión localmente
+                    localStorage.setItem('usuario', username);
+
+                    // Redirigir después de 1 segundo
+                    setTimeout(() => {
+                        window.location.href = 'dashboard.html';
+                    }, 1000);
+
+                } else {
+                    throw new Error(data.message || "Acceso denegado");
+                }
+
+            } catch (error) {
+                loginMessage.textContent = '❌ ' + error.message;
+                loginMessage.className = 'message error';
+                loginMessage.style.display = 'block';
+
+                loginUser.disabled = false;
+                loginPass.disabled = false;
+                loginBtn.textContent = originalButtonText;
+                loginBtn.disabled = false;
+            }
+        }
+
+        loginBtn.addEventListener('click', intentarLogin);
+        
+        loginPass.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); intentarLogin(); }
+        });
+
+        loginUser.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); loginPass.focus(); }
+        });
+    </script>
+
+</body>
+</html>

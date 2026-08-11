@@ -1,0 +1,21 @@
+<header>
+    <h2 class="header-title">Registro de Devoluciones</h2>
+    <div class="header-actions">
+        <input type="text" id="devolucionVentaSearch" placeholder="Buscar por ID de Venta..." inputmode="numeric">
+        <button id="btnBuscarVenta" class="action-btn btn-blue">Buscar Venta</button>
+    </div>
+</header>
+<div class="content-area">
+    <div id="devolucionResultContainer">
+        <div class="welcome-container" style="height: auto; padding: 40px; background: var(--bg-card); border-radius: 12px;">
+            <p style="font-size: 1rem; color: var(--text-muted);">
+                Introduce el ID de una venta en la barra superior para ver los productos asociados y registrar una devolución.
+            </p>
+        </div>
+    </div>
+    <div id="historialDevolucionesContainer" style="margin-top: 30px;">
+        <h3 class="category-box-title" style="margin-bottom: 15px;">Historial de Devoluciones Recientes</h3>
+        <div id="historialDevolucionesContent">
+        </div>
+    </div>
+</div>

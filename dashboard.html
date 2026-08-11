@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Facturación | Control de Inventario</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- PDF Generation Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <link rel="shortcut icon" href="/imagen/" type="image/x-icon">
+    <link rel="icon" type="imageN/x-icon" href="/imagen/logo2.png">
+    <script>
+        // Aplica el tema (claro/oscuro) guardado en localStorage para evitar el parpadeo.
+        // Este script se ejecuta antes de que se renderice el body.
+        const THEME_KEY = 'appTheme';
+        const savedTheme = localStorage.getItem(THEME_KEY) || 'dark';
+        document.documentElement.dataset.theme = savedTheme;
+    </script>
+</head>
+<body>
+
+    <!-- Imagen del logo para el PDF, oculta a la vista -->
+    <img id="logo-img" src="/imagen/logo2.png" style="display: none;" alt="Logo">
+
+    <aside>
+        <div class="sidebar-brand">
+            <img class="logo" src="/imagen/logo2.png" alt="Omega Logo">
+            <h2>TOTAL REPUESTOS</h2>
+        </div>
+
+        <div class="sidebar-menu">
+            <button class="nav-btn active">inicio</button>
+            <button class="nav-btn">inventario de productos</button>
+            <button class="nav-btn">caja</button>
+            <button class="nav-btn">ventas</button>
+            <button class="nav-btn">devoluciones</button>
+            <button class="nav-btn">reportes</button>
+            <button class="nav-btn">ajustes</button>
+        </div>
+        
+        <div class="exchange-rates-panel" id="exchangeRatesPanel">
+            <div class="exchange-rate-item bcv">
+                <span class="exchange-rate-label">BCV:</span>
+                <span class="exchange-rate-value" id="sidebarBcvRate">Cargando...</span>
+            </div>
+            <div class="exchange-rate-item parallel">
+                <span class="exchange-rate-label">Paralelo:</span>
+                <span class="exchange-rate-value" id="sidebarParallelRate">Cargando...</span>
+            </div>
+        </div>
+
+        <div class="user-panel">
+            <div class="user-info">usuario: <span class="user-name" id="usernameDisplay">Cargando...</span></div>
+            <button class="btn-logout" id="logoutBtn">Cerrar Sesión</button>
+        </div>
+    </aside>
+
+    <!-- El contenido de los módulos se cargará dinámicamente aquí -->
+    <main id="visor-modulos" class="main-wrapper">
+        <!-- El HTML de vistas/inicio.html, vistas/inventario.html, etc. se inyectará aquí -->
+    </main>
+
+    <!-- Overlay para cuando la barra lateral móvil está abierta -->
+    <div class="content-overlay" id="content-overlay"></div>
+
+    <div class="modal-overlay" id="modalVenta">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3>Finalizar Venta y Facturación</h3>
+                <button type="button" data-modal-close style="background:none; border:none; color:var(--text-muted); font-size:1.2rem; cursor:pointer;">&times;</button>
+            </div>
+            <form id="formDatosCliente" class="modal-body">
+                <div class="field-group">
+                    <label for="cliNombre">Nombre del Cliente *</label>
+                    <input type="text" id="cliNombre" required placeholder="Ej. Juan Pérez" autocomplete="off">
+                </div>
+
+                <div class="field-group">
+                    <label for="cliCedula">Cédula o RIF (Máx. 10 dígitos) *</label>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <select id="cliTipoCedula" style="width: 80px; flex-shrink: 0;" required>
+                            <option value="V">V</option>
+                            <option value="E">E</option>
+                            <option value="J">J</option>
+                            <option value="G">G</option>
+                        </select>
+                        <input type="text" id="cliCedula" maxlength="10" inputmode="numeric" pattern="[0-9]{1,10}" required placeholder="Ej. 12345678" autocomplete="off" style="flex: 1;">
+                        <button type="button" id="btnBuscarCliente" class="action-btn btn-blue" style="padding: 5px 12px; font-size: 0.8rem; font-weight: 600; white-space: nowrap;">Buscar</button>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label for="cliTelefono">Teléfono (Solo números, máx. 16 dígitos) *</label>
+                    <input type="text" id="cliTelefono" maxlength="16" inputmode="numeric" pattern="[0-9]*" required placeholder="Ej. 04141234567" autocomplete="off">
+                </div>
+
+                <div class="field-group">
+                    <label for="cliDireccion">Dirección</label>
+                    <textarea id="cliDireccion" rows="2" placeholder="Dirección del cliente (opcional)" style="resize: none;"></textarea>
+                </div>
+
+                <div class="field-group">
+                    <label for="cliTipoPago">Tipo de Pago *</label>
+                    <select id="cliTipoPago" required>
+                        <option value="">Selecciona método de pago...</option>
+                        <option value="Pago Móvil">Pago Móvil</option>
+                        <option value="Binance">Binance</option>
+                        <option value="Dólares en efectivo">Dólares en efectivo</option>
+                        <option value="Bolívares en efectivo">Bolívares en efectivo</option>
+                        <option value="Zelle">Zelle</option>
+                    </select>
+                </div>
+
+                <div class="field-group">
+                    <label>Desglose de Montos y Tasas Actuales</label>
+                    <div class="modal-resumen-pago">
+                        <div class="modal-resumen-row">
+                            <span>Total en Dólares ($):</span>
+                            <span id="modalTotalUsd" style="font-weight: bold;">$ 0.00</span>
+                        </div>
+                        <div class="modal-resumen-row">
+                            <span>Total en Bolívares (Bs):</span>
+                            <span id="modalTotalBs" style="font-weight: bold; color: var(--btn-green);">Bs 0.00</span>
+                        </div>
+                        <div class="modal-tasas-grid">
+                            <div>BCV Oficial: <span id="lblTasaBcv">0.00</span></div>
+                            <div>Paralelo: <span id="lblTasaParalelo">0.00</span></div>
+                            <div>BCV (Base): <span id="lblTasaBcvBase">0.00</span></div>
+                            <div>USDT (Ref): <span id="lblTasaUsdtRef">0.00</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" data-modal-close class="action-btn" style="background: #475569; padding: 10px 18px; border: none; border-radius: 6px; color: white; cursor: pointer;">Cancelar</button>
+                    <button type="submit" id="btnConfirmarVenta" class="action-btn btn-green" style="padding: 10px 18px; border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: 600;">Procesar Pago</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modalCategoria">
+        <div class="modal">
+            <button type="button" class="action-btn btn-del" data-modal-close style="position: absolute; top: 20px; right: 20px; padding: 6px 14px; font-size: 0.85rem;">cerrar</button>
+            <h3>Gestión de Categorías</h3>
+            <div class="modal-form" id="formCategoria">
+                <input type="hidden" id="catId">
+                <div class="field-group"><label>Nombre</label><input type="text" id="catNombre"></div>
+                <div class="modal-buttons categoria-management" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: center;">
+                    <button type="button" class="action-btn btn-add" id="btnAgregarCat">Agregar</button>
+                    <button type="button" class="action-btn btn-del" id="btnEliminarCat">Eliminar</button>
+                    <button type="button" class="action-btn btn-edit" id="btnEditarCat">editar</button>
+                    <input type="text" id="catBuscar" placeholder="buscar" style="grid-column: 1 / -1; width: 100%; padding-left: 12px;">
+                </div>
+            </div>
+            <div class="field-group">
+                <label style="font-weight: bold; color: var(--text-primary);">Registradas:</label>
+                <ul class="cat-list" id="listaCategorias"></ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modalProducto">
+        <div class="modal" style="max-width: 550px;">
+            <button type="button" class="action-btn btn-del" data-modal-close style="position: absolute; top: 20px; right: 20px; padding: 6px 14px; font-size: 0.85rem;">cerrar</button>
+            <h3>Cargar Nuevo Producto</h3>
+            <form class="modal-form" id="formProducto" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <input type="hidden" id="prodEditCodigo">
+                <div class="field-group"><label>Categoría</label><select id="prodCategoria" required><option value="">Selecciona...</option></select></div>
+                <div class="field-group"><label for="prodNombre">Nombre</label><input type="text" id="prodNombre" required></div>
+                <div class="field-group"><label for="prodCodigo">Código</label><input type="text" id="prodCodigo" required></div>
+                <div class="field-group"><label for="prodCantidad">Cantidad</label><input type="number" id="prodCantidad" required></div>
+                <div class="field-group"><label for="prodUbicacion">Ubicación</label><input type="text" id="prodUbicacion" maxlength="3" placeholder="Ej: A01"></div>
+                
+                <!-- Campos de precio manuales, ahora parte de la cuadrícula principal -->
+                <div class="field-group manual-price-field"><label for="prodCostoDolaresBcv">Precio Costo $ BCV</label><input type="number" step="0.01" id="prodCostoDolaresBcv" placeholder="Ej: 8.00"></div>
+                <div class="field-group manual-price-field"><label for="prodVentaDolaresBcv">Precio Venta $ BCV</label><input type="number" step="0.01" id="prodVentaDolaresBcv" placeholder="Ej: 10.50"></div>
+                <div class="field-group manual-price-field"><label for="prodUsdt">Precio Venta $ USDT</label><input type="number" step="0.01" id="prodUsdt" placeholder="Ej: 11.20"></div>
+
+                <!-- Contenedor para la calculadora de precios -->
+                <div id="calculator-container" style="grid-column: span 2; display: none;">
+                    <div id="calculator-inputs" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                        <div class="field-group" style="margin:0;"><label for="calcCostoUsdt">Costo ($ USDT)</label><input type="number" step="0.01" id="calcCostoUsdt" placeholder="Ej: 8.50"></div>
+                        <div class="field-group" style="margin:0;"><label for="calcDescuento">Descuento (%)</label><input type="number" step="0.01" id="calcDescuento" value="0" placeholder="Ej: 10"></div>
+                        <div class="field-group" style="margin:0;"><label for="calcGanancia">Ganancia (%)</label><input type="number" step="0.01" id="calcGanancia" placeholder="Ej: 20"></div>
+                    </div>
+                    <div style="text-align: center; margin: 15px 0;">
+                        <button type="button" id="btnCalcularPrecios" class="action-btn btn-blue">Calcular Precios</button>
+                    </div>
+                    <div id="calculator-results" style="display: none; background: var(--bg-input); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+                        <h4 style="margin-top: 0; margin-bottom: 10px; color: var(--text-muted); font-size: 0.8rem; text-align: center;">RESULTADOS DEL CÁLCULO</h4>
+                        <p style="font-size: 0.9rem;"><strong>costo $ USDT:</strong> <span id="resVentaUsdt">0.00</span></p>
+                        <p style="font-size: 0.9rem; margin-bottom: 5px;"><strong>Costo $ BCV:</strong> <span id="resCostoBcv">0.00</span></p>
+                        <p style="font-size: 0.9rem; margin-bottom: 5px;"><strong>Venta $ BCV:</strong> <span id="resVentaBcv">0.00</span></p>
+                        
+
+                    </div>
+                </div>
+
+                <div style="grid-column: span 2; border-top: 1px solid var(--border-color); padding-top: 15px; margin-top: 5px;">
+                    <div class="modal-toggle-buttons">
+                        <button type="button" id="btnModoManual" class="toggle-btn active">registro normal</button>
+                        <button type="button" id="btnModoCalculadora" class="toggle-btn">hacer calculo de %</button>
+                    </div>
+                </div>
+
+                <div class="modal-buttons" style="grid-column: span 2; margin-top: 15px;">
+                    <button type="submit" class="action-btn btn-green">Guardar Producto</button>
+                    <button type="button" class="action-btn btn-del" data-modal-close>Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modalAdicional">
+        <div class="modal" style="max-width: 500px;">
+            <button type="button" class="action-btn btn-del" data-modal-close style="position: absolute; top: 20px; right: 20px; padding: 6px 14px; font-size: 0.85rem;">cerrar</button>
+            <h3>Agregar Producto Adicional</h3>
+            <form class="modal-form" id="formAdicional" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="field-group"><label for="adicCodigo">Código (Opcional)</label><input type="text" id="adicCodigo" placeholder="Ej. ADIC-01"></div>
+                <div class="field-group"><label for="adicNombre">Nombre del Producto</label><input type="text" id="adicNombre" placeholder="Ej. Servicio Extra" required></div>
+                <div class="field-group"><label for="adicPrecioVenta">Precio de Venta ($)</label><input type="number" step="0.01" id="adicPrecioVenta" value="0.00" required></div>
+                <div class="field-group"><label for="adicCantidad">Cantidad</label><input type="number" id="adicCantidad" value="1" min="1" required></div>
+                <p style="grid-column: span 2; font-size: 0.8rem; color: var(--text-muted); margin: -5px 0 5px 0;">Este precio se usará para ambas tasas (BCV y USDT).</p>
+                <div class="modal-buttons" style="grid-column: span 2; margin-top: 10px;">
+                    <button type="submit" class="action-btn btn-green">Agregar a la Caja</button>
+                    <button type="button" class="action-btn btn-del" data-modal-close>Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modalPasswordVenta">
+        <div class="modal-container" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>Contraseña Requerida</h3>
+                <button type="button" data-modal-close class="action-btn btn-del" style="position: absolute; top: 15px; right: 15px; padding: 4px 10px; font-size: 0.8rem;">&times;</button>
+            </div>
+            <form id="formPasswordVenta" class="modal-body">
+                <p style="font-size: 0.9rem; color: var(--text-muted); text-align: center; margin-bottom: 10px;">Para editar esta venta, por favor ingrese la contraseña de autorización.</p>
+                <input type="hidden" id="ventaIdParaEditar">
+                <div class="field-group">
+                    <label for="adminPassword">Contraseña</label>
+                    <input type="password" id="adminPassword" required autocomplete="off">
+                </div>
+                <div class="modal-footer" style="margin-top: 20px;">
+                    <button type="button" data-modal-close class="action-btn" style="background: #475569;">Cancelar</button>
+                    <button type="submit" class="action-btn btn-blue">Verificar y Editar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modalEditarVenta">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3>Editar Venta <span id="editVentaIdDisplay" style="color: var(--btn-yellow); font-family: monospace;"></span></h3>
+                <button type="button" data-modal-close style="background:none; border:none; color:var(--text-muted); font-size:1.2rem; cursor:pointer;">&times;</button>
+            </div>
+            <form id="formEditarVenta" class="modal-body">
+                <input type="hidden" id="editVentaId">
+                <p style="font-size: 0.85rem; color: var(--text-muted); background-color: var(--bg-input); padding: 8px; border-radius: 6px; border-left: 3px solid var(--btn-orange);">
+                    <strong>Atención:</strong> Solo se pueden editar los datos del cliente y el método de pago. La modificación de productos o totales no está permitida.
+                </p>
+                <div class="field-group">
+                    <label for="editCliNombre">Nombre del Cliente *</label>
+                    <input type="text" id="editCliNombre" required placeholder="Ej. Juan Pérez" autocomplete="off">
+                </div>
+
+                <div class="field-group">
+                    <label for="editCliCedula">Cédula o RIF (Máx. 10 dígitos) *</label>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <select id="editCliTipoCedula" style="width: 80px; flex-shrink: 0;" required>
+                            <option value="V">V</option>
+                            <option value="E">E</option>
+                            <option value="J">J</option>
+                            <option value="G">G</option>
+                        </select>
+                        <input type="text" id="editCliCedula" maxlength="10" inputmode="numeric" pattern="[0-9]{1,10}" required placeholder="Ej. 12345678" autocomplete="off" style="flex: 1;">
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label for="editCliTelefono">Teléfono (Solo números, máx. 16 dígitos) *</label>
+                    <input type="text" id="editCliTelefono" maxlength="16" inputmode="numeric" pattern="[0-9]*" required placeholder="Ej. 04141234567" autocomplete="off">
+                </div>
+
+                <div class="field-group">
+                    <label for="editCliDireccion">Dirección</label>
+                    <textarea id="editCliDireccion" rows="2" placeholder="Dirección del cliente (opcional)" style="resize: none;"></textarea>
+                </div>
+
+                <div class="field-group">
+                    <label for="editCliTipoPago">Tipo de Pago *</label>
+                    <select id="editCliTipoPago" required>
+                        <option value="">Selecciona método de pago...</option>
+                        <option value="Pago Móvil">Pago Móvil</option>
+                        <option value="Binance">Binance</option>
+                        <option value="Dólares en efectivo">Dólares en efectivo</option>
+                        <option value="Bolívares en efectivo">Bolívares en efectivo</option>
+                        <option value="Zelle">Zelle</option>
+                    </select>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" data-modal-close class="action-btn" style="background: #475569;">Cancelar</button>
+                    <button type="submit" id="btnConfirmarEdicionVenta" class="action-btn btn-green">Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toastContainer"></div>
+
+    <script type="module" src="app.js" defer></script>
+</body>
+</html>

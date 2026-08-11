@@ -1,0 +1,32 @@
+<header>
+    <h2 class="header-title">historial de ventas</h2>
+    <div class="header-actions">
+        <input type="text" id="ventasSearch" placeholder="Buscar por cliente, ID factura o fecha...">
+    </div>
+</header>
+<div class="content-area">
+    <div style="overflow-x: auto;">
+        <table class="tabla-ventas-container">
+            <thead>
+                <tr>
+                    <th>ID Venta</th>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th>Cédula</th>
+                    <th>Teléfono</th>
+                    <th>Tipo Pago</th>
+                    <th>Productos / Cantidad</th>
+                    <th>Total ($)</th>
+                    <th>Total (Bs)</th>
+                </tr>
+            </thead>
+            <tbody id="tablaVentasBody">
+                <tr><td colspan="9" style="text-align: center; color: var(--text-muted);">Cargando ventas...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<footer>
+    <div class="total-item"><span class="total-label">ventas registradas:</span><span class="total-value" id="totalVentasCount">0</span></div>
+    <div class="total-item"><span class="total-label">ingreso total $:</span><span class="total-value" id="totalVentasUsd">$ 0.00</span></div>
+</footer>
