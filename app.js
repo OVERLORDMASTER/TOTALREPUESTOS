@@ -1,4 +1,4 @@
-import { generarFacturaPDF } from './generatepdf.js';
+import { generarFacturaPDF, generarInventarioPDF } from './source/generatepdf.js';
 import { showToast, showConfirmation } from './utils.js';
 
 // --- VALIDACIÓN DE SESIÓN Y ELEMENTOS GLOBALES ---
@@ -13,6 +13,22 @@ document.getElementById('logoutBtn').addEventListener('click', () => {
     localStorage.removeItem('usuario');
     window.location.href = 'index.html';
 });
+
+// --- FUNCIONES DE FORMATO DE NÚMEROS ---
+/**
+ * Formatea un número como moneda con separador de miles (punto) y dos decimales (coma).
+ * Ej: 1234.56 -> 1.234,56
+ */
+function formatCurrency(number) {
+    return new Intl.NumberFormat('es-VE', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(number);
+}
+
+function formatInteger(number) {
+    return new Intl.NumberFormat('es-VE').format(number);
+}
 
 // --- INICIO: Lógica para autocompletar datos del cliente ---
 const inputCedula = document.getElementById('cliCedula');
@@ -150,6 +166,12 @@ async function cargarVista(nombreVista) {
         return;
     }
 
+    // 1. Iniciar la animación de desvanecimiento
+    visorModulos.classList.add('loading');
+
+    // 2. Esperar a que termine la animación de desvanecimiento
+    await new Promise(resolve => setTimeout(resolve, 200)); // Debe coincidir con la duración de la transición en CSS
+
     try {
         const response = await fetch(`vistas/${vista.file}`);
         if (!response.ok) throw new Error(`No se pudo cargar ${vista.file}`);
@@ -185,6 +207,9 @@ async function cargarVista(nombreVista) {
     } catch (error) {
         console.error('Error al cargar la vista:', error);
         visorModulos.innerHTML = `<div class="welcome-container"><h1>Error</h1><p>No se pudo cargar el módulo. Revisa la consola para más detalles.</p></div>`;
+    } finally {
+        // 3. Quitar la clase para que el nuevo contenido aparezca con una animación de fundido
+        visorModulos.classList.remove('loading');
     }
 }
 
@@ -289,6 +314,21 @@ function initVistaInventario() {
     });
     document.getElementById('btnEditar').addEventListener('click', handleEditarProducto);
     document.getElementById('btnEliminar').addEventListener('click', handleEliminarProducto);
+    document.getElementById('btnPrintInventory').addEventListener('click', async () => {
+        const btn = document.getElementById('btnPrintInventory');
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Generando PDF...';
+        try {
+            await generarInventarioPDF(productosCache);
+        } catch (error) {
+            console.error('Error al generar el PDF de inventario:', error);
+            showToast('No se pudo generar el PDF.', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    });
 }
 
 async function loadProducts() {
@@ -328,22 +368,22 @@ function renderProducts(productsToRender) {
         gridEl.className = 'products-grid';
 
         prods.forEach(p => {
-            const precioVentaBsBcv = (p.precio_venta_dolares_bcv * oficialRate).toFixed(2);
-            const precioCostoBsBcv = (p.precio_costo_dolares_bcv * oficialRate).toFixed(2);
-            const precioBsUsdt = (p.precio_usdt * paraleloRate).toFixed(2);
+            const precioVentaBsBcv = formatCurrency(p.precio_venta_dolares_bcv * oficialRate);
+            const precioCostoBsBcv = formatCurrency(p.precio_costo_dolares_bcv * oficialRate);
+            const precioBsUsdt = formatCurrency(p.precio_usdt * paraleloRate);
             const card = document.createElement('div');
             card.className = 'product-card';
             card.dataset.codigo = p.codigo;
             card.innerHTML = `
                 <div class="field-group"><label>nombre</label><div class="product-card-value">${p.nombre}</div></div>
                 <div class="field-group"><label>código</label><div class="product-card-value">${p.codigo}</div></div>
-                <div class="field-group"><label>cantidad</label><div class="product-card-value">${p.cantidad}</div></div>
+                <div class="field-group"><label>cantidad</label><div class="product-card-value">${formatInteger(p.cantidad)}</div></div>
                 <div class="field-group"><label>ubicación</label><div class="product-card-value">${p.ubicacion || ''}</div></div>
-                <div class="field-group"><label>precio venta $ bcv</label><div class="product-card-value">${p.precio_venta_dolares_bcv.toFixed(2)}</div></div>
+                <div class="field-group"><label>precio venta $ bcv</label><div class="product-card-value">${formatCurrency(p.precio_venta_dolares_bcv)}</div></div>
                 <div class="field-group"><label>precio venta bs (bcv)</label><div class="product-card-value">${precioVentaBsBcv}</div></div>
-                <div class="field-group"><label>precio costo $ bcv</label><div class="product-card-value">${p.precio_costo_dolares_bcv.toFixed(2)}</div></div>
+                <div class="field-group"><label>precio costo $ bcv</label><div class="product-card-value">${formatCurrency(p.precio_costo_dolares_bcv)}</div></div>
                 <div class="field-group"><label>precio costo bs (bcv)</label><div class="product-card-value">${precioCostoBsBcv}</div></div>
-                <div class="field-group"><label>precio $ usdt</label><div class="product-card-value">${p.precio_usdt.toFixed(2)}</div></div>
+                <div class="field-group"><label>precio $ usdt</label><div class="product-card-value">${formatCurrency(p.precio_usdt)}</div></div>
                 <div class="field-group"><label>precio bs (usdt)</label><div class="product-card-value">${precioBsUsdt}</div></div>`;
             card.addEventListener('click', () => {
                 if (modoEdicion) return;
@@ -362,8 +402,8 @@ function renderProducts(productsToRender) {
         totalInvertido += p.cantidad * p.precio_costo_dolares_bcv;
         stockTotal += p.cantidad;
     });
-    document.getElementById('totalInvertido').textContent = `$ ${totalInvertido.toFixed(2)}`;
-    document.getElementById('stockTotal').textContent = stockTotal;
+    document.getElementById('totalInvertido').textContent = `$ ${formatCurrency(totalInvertido)}`;
+    document.getElementById('stockTotal').textContent = formatInteger(stockTotal);
 }
 
 async function handleEditarProducto() {
@@ -567,8 +607,8 @@ function renderizarParaLlevar() {
 
     let totalArticulos = 0, totalBcv = 0;
     productosParaLlevar.forEach(item => {
-        const subtotalUSD = item.precio_venta_dolares_bcv * item.cantidadLlevar;
-        const subtotalBS = (subtotalUSD * oficialRate).toFixed(2);
+        const subtotalUSD = item.precio_usdt * item.cantidadLlevar; // Usar precio_usdt para el cálculo del total en USD
+        const subtotalBS = formatCurrency(subtotalUSD * oficialRate);
 
         totalArticulos += item.cantidadLlevar;
         totalBcv += subtotalUSD;
@@ -586,11 +626,11 @@ function renderizarParaLlevar() {
         container.appendChild(card);
     });
 
-    const totalBcvBs = totalBcv * oficialRate;
+    const totalBcvBs = totalBcv * paraleloRate; // Usar paraleloRate para el total en Bs
 
-    if (totalArticulosEl) totalArticulosEl.textContent = totalArticulos;
-    if (totalBcvEl) totalBcvEl.textContent = `$ ${totalBcv.toFixed(2)}`;
-    if (totalBcvBsEl) totalBcvBsEl.textContent = `Bs ${totalBcvBs.toFixed(2)}`;
+    if (totalArticulosEl) totalArticulosEl.textContent = formatInteger(totalArticulos);
+    if (totalBcvEl) totalBcvEl.textContent = `$ ${formatCurrency(totalBcv)}`;
+    if (totalBcvBsEl) totalBcvBsEl.textContent = `Bs ${formatCurrency(totalBcvBs)}`;
 }
 
 function actualizarCantidadLlevar(codigo, val) {
@@ -684,7 +724,7 @@ function renderizarTablaVentas(listaVentas) {
         const [year, month] = mesKey.split('-');
         const nombreMes = new Date(year, month - 1).toLocaleString('es-ES', { month: 'long', year: 'numeric' });
         const totalVentasMes = ventasDelMes.length;
-        const totalUsdMes = ventasDelMes.reduce((sum, v) => sum + parseFloat(v.total_usd || 0), 0);
+        const totalUsdMes = ventasDelMes.reduce((sum, v) => sum + (parseFloat(v.total_usd || 0)), 0);
 
         const monthGroup = document.createElement('div');
         monthGroup.className = 'venta-month-group';
@@ -695,7 +735,7 @@ function renderizarTablaVentas(listaVentas) {
             <div class="fecha-titulo">${nombreMes}</div>
             <div class="fecha-resumen">
                 <span>Ventas Totales: ${totalVentasMes}</span>
-                <span>Monto Total: $ ${totalUsdMes.toFixed(2)}</span>
+                <span>Monto Total: $ ${formatCurrency(totalUsdMes)}</span>
             </div>
             <div class="fecha-icono">▼</div>`;
 
@@ -731,7 +771,7 @@ function renderizarTablaVentas(listaVentas) {
             const ventasDelDia = ventasPorDia[diaKey];
             const fechaFormateada = new Date(ventasDelDia[0].fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
             const totalVentasDia = ventasDelDia.length;
-            const totalUsdDia = ventasDelDia.reduce((sum, v) => sum + parseFloat(v.total_usd || 0), 0);
+            const totalUsdDia = ventasDelDia.reduce((sum, v) => sum + (parseFloat(v.total_usd || 0)), 0);
 
             const dayGroup = document.createElement('div');
             dayGroup.className = 'venta-date-group';
@@ -742,7 +782,7 @@ function renderizarTablaVentas(listaVentas) {
                 <div class="fecha-titulo">${fechaFormateada}</div>
                 <div class="fecha-resumen">
                     <span>Ventas: ${totalVentasDia}</span>
-                    <span>Total: $ ${totalUsdDia.toFixed(2)}</span>
+                    <span>Total: $ ${formatCurrency(totalUsdDia)}</span>
                 </div>
                 <div class="fecha-icono">▼</div>`;
 
@@ -797,8 +837,8 @@ function renderizarTablaVentas(listaVentas) {
                     <td>${v.cliente_telefono}</td>
                     <td><span style="color: var(--btn-green); font-weight: 600;">${v.tipo_pago}</span></td>
                     <td>${productosHtml}</td>
-                    <td style="font-weight: bold;">$ ${parseFloat(v.total_usd).toFixed(2)}</td>
-                    <td style="font-weight: bold;">Bs ${parseFloat(v.total_bs).toFixed(2)}</td>
+                    <td style="font-weight: bold;">$ ${formatCurrency(parseFloat(v.total_usd))}</td>
+                    <td style="font-weight: bold;">Bs ${formatCurrency(parseFloat(v.total_bs))}</td>
                     <td class="venta-acciones">
                         <button class="btn-pdf" data-venta-id="${v.id}">PDF</button>
                         <button class="btn-edit-venta" data-venta-id="${v.id}">Editar</button>
@@ -818,9 +858,9 @@ function renderizarTablaVentas(listaVentas) {
         container.appendChild(monthGroup);
     });
 
-    const sumaTotalUsd = listaVentas.reduce((sum, v) => sum + parseFloat(v.total_usd || 0), 0);
-    document.getElementById('totalVentasCount').textContent = listaVentas.length;
-    document.getElementById('totalVentasUsd').textContent = `$ ${sumaTotalUsd.toFixed(2)}`;
+    const sumaTotalUsd = listaVentas.reduce((sum, v) => sum + (parseFloat(v.total_usd || 0)), 0);
+    document.getElementById('totalVentasCount').textContent = formatInteger(listaVentas.length);
+    document.getElementById('totalVentasUsd').textContent = `$ ${formatCurrency(sumaTotalUsd)}`;
 }
 
 async function handleDeleteSale(ventaId) {
@@ -1109,9 +1149,9 @@ function generarReporteParaPeriodo(periodo, ventas, productosMap) {
 
     const chartContainer = chartCanvas.parentElement;
     if (!ventas || ventas.length === 0) {
-        usdEl.textContent = '$0.00';
-        bsEl.textContent = 'Bs 0.00';
-        gananciaEl.textContent = '$0.00';
+        usdEl.textContent = `$${formatCurrency(0)}`;
+        bsEl.textContent = `Bs ${formatCurrency(0)}`;
+        gananciaEl.textContent = `$${formatCurrency(0)}`;
         breakdownContainer.innerHTML = '<p class="loading-text">No hay ventas en este período.</p>';
         if (chartContainer) chartContainer.style.display = 'none'; // Ocultar si no hay datos
         return;
@@ -1142,9 +1182,9 @@ function generarReporteParaPeriodo(periodo, ventas, productosMap) {
         }
     }
 
-    usdEl.textContent = `$${totalUsd.toFixed(2)}`;
-    bsEl.textContent = `Bs ${totalBs.toFixed(2)}`;
-    gananciaEl.textContent = `$${totalProfit.toFixed(2)}`;
+    usdEl.textContent = `$${formatCurrency(totalUsd)}`;
+    bsEl.textContent = `Bs ${formatCurrency(totalBs)}`;
+    gananciaEl.textContent = `$${formatCurrency(totalProfit)}`;
 
     // Renderizar la tabla de desglose
     const table = document.createElement('table');
@@ -1155,9 +1195,9 @@ function generarReporteParaPeriodo(periodo, ventas, productosMap) {
     for (const [metodo, data] of Object.entries(porMetodo).sort((a, b) => b[1].totalUsd - a[1].totalUsd)) {
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${metodo} (${data.count} ventas)</td>
-            <td>$${data.totalUsd.toFixed(2)}</td>
-            <td>Bs ${data.totalBs.toFixed(2)}</td>
+            <td>${metodo} (${formatInteger(data.count)} ventas)</td>
+            <td>$${formatCurrency(data.totalUsd)}</td>
+            <td>Bs ${formatCurrency(data.totalBs)}</td>
         `;
         tbody.appendChild(row);
     }
@@ -1199,7 +1239,7 @@ function generarReporteParaPeriodo(periodo, ventas, productosMap) {
                     titleFont: { size: 14 },
                     bodyFont: { size: 12 },
                     callbacks: {
-                        label: (context) => `Total: ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.parsed.x)}`
+                        label: (context) => `Total: ${formatCurrency(context.parsed.x)}`
                     }
                 }
             },
@@ -1617,15 +1657,15 @@ document.addEventListener('click', (e) => {
         }
 
         const valorConDescuento = costoProductoUsdt * (1 - (descuento / 100));
-        const costoEnBolivares = valorConDescuento * tasaBinance;
-        const precioCostoDolaresBcv = costoEnBolivares / tasaBcv;
-        const precioVentaDolaresBcv = precioCostoDolaresBcv * (1 + (ganancia / 100));
-        const precioUsdt = valorConDescuento;
+        const costoEnBolivares = valorConDescuento * tasaBinance; // Esto es USDT * Tasa Paralelo
+        const precioCostoDolaresBcv = costoEnBolivares / tasaBcv; // Esto es Costo en Bs / Tasa Oficial
+        const precioVentaDolaresBcv = precioCostoDolaresBcv * (1 + (ganancia / 100)); // Esto es Costo $BCV * (1 + Ganancia %)
+        const precioUsdt = valorConDescuento; // Esto es Costo $USDT con descuento
 
         // Mostrar resultados en el cuadro de resultados
-        document.getElementById('resCostoBcv').textContent = `$ ${precioCostoDolaresBcv.toFixed(2)}`;
-        document.getElementById('resVentaBcv').textContent = `$ ${precioVentaDolaresBcv.toFixed(2)}`;
-        document.getElementById('resVentaUsdt').textContent = `$ ${precioUsdt.toFixed(2)}`;
+        document.getElementById('resCostoBcv').textContent = `$ ${formatCurrency(precioCostoDolaresBcv)}`;
+        document.getElementById('resVentaBcv').textContent = `$ ${formatCurrency(precioVentaDolaresBcv)}`;
+        document.getElementById('resVentaUsdt').textContent = `$ ${formatCurrency(precioUsdt)}`;
         document.getElementById('calculator-results').style.display = 'block';
 
         showToast('Precios calculados. Revisa los resultados.', 'success');
@@ -1676,14 +1716,14 @@ async function handleAbrirModalVenta() {
         return;
     }
     await obtenerTasas();
-    const totalUsd = productosParaLlevar.reduce((acc, item) => acc + (item.precio_usdt * item.cantidadLlevar), 0);
-    const totalBs = totalUsd * paraleloRate;
-    document.getElementById('modalTotalUsd').textContent = `$ ${totalUsd.toFixed(2)}`;
-    document.getElementById('modalTotalBs').textContent = `Bs ${totalBs.toFixed(2)}`;
-    document.getElementById('lblTasaBcv').textContent = oficialRate.toFixed(2);
-    document.getElementById('lblTasaParalelo').textContent = paraleloRate.toFixed(2);
-    document.getElementById('lblTasaBcvBase').textContent = oficialRate.toFixed(2);
-    document.getElementById('lblTasaUsdtRef').textContent = paraleloRate.toFixed(2);
+    const totalUsd = productosParaLlevar.reduce((acc, item) => acc + (item.precio_usdt * item.cantidadLlevar), 0); // Total en USD (USDT)
+    const totalBs = totalUsd * paraleloRate; // Total en Bs (usando tasa paralelo)
+    document.getElementById('modalTotalUsd').textContent = `$ ${formatCurrency(totalUsd)}`;
+    document.getElementById('modalTotalBs').textContent = `Bs ${formatCurrency(totalBs)}`;
+    document.getElementById('lblTasaBcv').textContent = formatCurrency(oficialRate);
+    document.getElementById('lblTasaParalelo').textContent = formatCurrency(paraleloRate);
+    document.getElementById('lblTasaBcvBase').textContent = formatCurrency(oficialRate);
+    document.getElementById('lblTasaUsdtRef').textContent = formatCurrency(paraleloRate);
 
     const modal = document.getElementById('modalVenta');
     const footer = modal.querySelector('.modal-footer, .modal-buttons');
@@ -1791,19 +1831,81 @@ document.getElementById('formDatosCliente').addEventListener('submit', async (e)
 // Modal Categorías
 async function initModalCategorias() {
     await cargarCategorias();
+    const modal = document.getElementById('modalCategoria');
+
+    // Evitar agregar listeners múltiples veces
+    if (modal.dataset.listenersAttached) {
+        return;
+    }
+    modal.dataset.listenersAttached = 'true';
+
     document.getElementById('catBuscar').addEventListener('input', (e) => renderizarListaCategorias(e.target.value));
+    
     document.getElementById('btnAgregarCat').addEventListener('click', async () => {
         const nombre = document.getElementById('catNombre').value.trim();
-        if (!nombre) return;
+        if (!nombre) {
+            showToast('El nombre de la categoría no puede estar vacío.', 'error');
+            return;
+        }
         await _supabase.from('categorias').insert([{ nombre }]);
         document.getElementById('catNombre').value = '';
         cargarCategorias();
         socket.emit('cambio-dato', { type: 'categories' });
         showToast('Categoría agregada.', 'success');
     });
-    // Lógica para editar y eliminar se puede añadir aquí
-}
 
+    document.getElementById('btnEditarCat').addEventListener('click', async () => {
+        const catId = document.getElementById('catId').value;
+        const nuevoNombre = document.getElementById('catNombre').value.trim();
+
+        if (!catId) {
+            showToast('Selecciona una categoría para editar.', 'error');
+            return;
+        }
+        if (!nuevoNombre) {
+            showToast('El nombre de la categoría no puede estar vacío.', 'error');
+            return;
+        }
+        
+        showConfirmation(`¿Confirmas el cambio de nombre a "${nuevoNombre}"?`, async () => {
+            const { error } = await _supabase.from('categorias').update({ nombre: nuevoNombre }).eq('id', catId);
+            if (error) {
+                showToast(`Error al editar: ${error.message}`, 'error');
+                return;
+            }
+            document.getElementById('catNombre').value = '';
+            document.getElementById('catId').value = '';
+            categoriaSeleccionadaId = null;
+            cargarCategorias();
+            socket.emit('cambio-dato', { type: 'categories' });
+            showToast('Categoría actualizada.', 'success');
+        });
+    });
+
+    document.getElementById('btnEliminarCat').addEventListener('click', async () => {
+        const catId = document.getElementById('catId').value;
+        if (!catId) {
+            showToast('Selecciona una categoría para eliminar.', 'error');
+            return;
+        }
+        const categoriaSeleccionada = categoriasCache.find(c => c.id == catId);
+        if (!categoriaSeleccionada) return;
+
+        showConfirmation(`¿Eliminar la categoría "${categoriaSeleccionada.nombre}"?`, async () => {
+            const { error } = await _supabase.from('categorias').delete().eq('id', catId);
+            if (error) {
+                showToast(`Error al eliminar: ${error.message}`, 'error');
+                return;
+            }
+            document.getElementById('catNombre').value = '';
+            document.getElementById('catId').value = '';
+            categoriaSeleccionadaId = null;
+            cargarCategorias();
+            socket.emit('cambio-dato', { type: 'categories' });
+            showToast('Categoría eliminada.', 'success');
+        });
+    });
+}
 async function cargarCategorias(filtro = '') {
     const { data } = await _supabase.from('categorias').select('*');
     if (data) {
@@ -1887,7 +1989,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (costoProductoUsdt <= 0 || ganancia < 0 || paraleloRate <= 0 || oficialRate <= 0) {
                     showToast('Costo, ganancia y tasas son requeridos.', 'error'); return;
                 }
-                const valorConDescuento = costoProductoUsdt * (1 - (descuento / 100));
+                const valorConDescuento = costoProductoUsdt * (1 - (descuento / 100)); // Costo USDT con descuento
                 const costoEnBolivares = valorConDescuento * paraleloRate;
                 precioCostoDolaresBcv = costoEnBolivares / oficialRate;
                 precioVentaDolaresBcv = precioCostoDolaresBcv * (1 + (ganancia / 100));

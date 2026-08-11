@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="factura.css">
+</head>
+<body>
+
+<div class="invoice-container">
+    <div class="header">
+        <div class="logo-section">
+            <img src="/imagen/logo.png" alt="TOTAL REPUESTOS C&S Logo" onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';">
+            <div id="logo-fallback" style="display:none; font-weight:bold; font-size:16px; border:2px dashed #999; border-radius:6px; padding:10px;">[ LOGO ]</div>
+            <div class="company-info">
+                UBICACIÓN : Carrera 28 entre calles 44 y 45.<br>
+                NRO CELULAR : 0424-5436998<br>
+                INSTAGRAM : @totalrepuestosc
+            </div>
+        </div>
+        <div class="title-section" style="text-align: right;">
+            <div style="font-weight: bold; font-size: 13.5px; margin-bottom: 6px; color: #2c3e50; text-transform: uppercase; letter-spacing: 0.5px;">NOTA DE ENTREGA</div>
+            <div>
+                <input type="text" class="note-number-input" id="noteNumber" placeholder="">
+            </div>
+        </div>
+    </div>
+
+    <div class="form-row">
+        <div class="field-group" style="flex: 2;">
+            <label>ID :</label>
+            <input type="text" id="invoiceId" placeholder="Ingrese ID">
+        </div>
+        <div class="field-group" style="flex: 2;">
+            <label>FECHA :</label>
+            <input type="datetime-local" id="fechaHora">
+        </div>
+    </div>
+
+    <div class="form-row">
+        <div class="field-group" style="flex: 3;">
+            <label>NOMBRE DEL CLIENTE :</label>
+            <input type="text" id="nombreCliente" placeholder="Nombre completo del cliente">
+        </div>
+        <div class="field-group" style="flex: 2;">
+            <label>VENDEDOR :</label>
+            <input type="text" id="vendedor" placeholder="Nombre del vendedor">
+        </div>
+    </div>
+
+    <div class="form-row">
+        <div class="field-group" style="flex: 3;">
+            <label>DIRECCIÓN :</label>
+            <input type="text" id="direccion" placeholder="Dirección del cliente">
+        </div>
+        <div class="field-group" style="flex: 2;">
+            <label>CÉDULA :</label>
+            <input type="text" id="cedula" placeholder="Cédula o RIF">
+        </div>
+    </div>
+
+    <div class="form-row">
+        <div class="field-group" style="flex: 1;">
+            <label>GARANTÍA :</label>
+            <input type="text" id="garantia" placeholder="">
+        </div>
+        <div class="field-group" style="flex: 1;" id="tipoPagoContainer">
+            <label>TIPO DE PAGO :</label>
+            <input type="text" id="tipoPago" placeholder="">
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table id="itemsTable">
+            <thead>
+                <tr>
+                    <th style="width: 10%;">CÓDIGO</th>
+                    <th style="width: 33%;">DESCRIPCIÓN</th>
+                    <th style="width: 12%;">MARCA</th>
+                    <th style="width: 14%;">PRECIO UNITARIO BS</th>
+                    <th style="width: 14%;">SUBTOTAL BS</th>
+                    <th style="width: 7%;">UDS</th>
+                    <th class="no-print" style="width: 10%;">ACCIÓN</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                </tbody>
+        </table>
+    </div>
+
+    <div class="no-print" style="margin-bottom: 20px;">
+        <button class="btn" onclick="addRow()">+ AGREGAR FILA</button>
+    </div>
+
+    <div class="footer-section">
+        <div class="totals-box">
+            <div class="total-field">
+                <span>TOTAL BS :</span>
+                <input type="text" id="totalBS" value="0.00" readonly>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-danger" onclick="clearForm()">LIMPIAR</button>
+            <button class="btn" onclick="window.print()">IMPRIMIR / GUARDAR PDF</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    window.addEventListener('DOMContentLoaded', () => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        document.getElementById('fechaHora').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+        for(let i = 0; i < 10; i++) {
+            addRow();
+        }
+    });
+
+    function addRow() {
+        const tbody = document.getElementById('tableBody');
+        const row = document.createElement('tr');
+        
+        row.innerHTML = `
+            <td><input type="text" class="codigo"></td>
+            <td><input type="text" class="text-left descripcion"></td>
+            <td><input type="text" class="marca"></td>
+            <td><input type="number" step="0.01" class="precioBS" oninput="calculateRowBS(this)"></td>
+            <td><input type="text" class="subtotalBS" value="0.00" readonly></td>
+            <td><input type="number" class="uds" value="1" oninput="calculateRowBS(this)"></td>
+            <td class="no-print"><button type="button" class="btn btn-danger" style="padding: 2px 8px; font-size: 11px; border-radius: 4px;" onclick="deleteRow(this)">X</button></td>
+        `;
+        tbody.appendChild(row);
+    }
+
+    function deleteRow(btn) {
+        const row = btn.closest('tr');
+        row.remove();
+        calculateTotals();
+    }
+
+    function calculateRowBS(element) {
+        const row = element.closest('tr');
+        const precioBS = parseFloat(row.querySelector('.precioBS').value) || 0;
+        const uds = parseFloat(row.querySelector('.uds').value) || 0;
+        
+        const subtotalBS = precioBS * uds;
+        row.querySelector('.subtotalBS').value = subtotalBS.toFixed(2);
+        
+        calculateTotals();
+    }
+
+    function calculateTotals() {
+        let totalBS = 0;
+
+        document.querySelectorAll('.subtotalBS').forEach(input => {
+            totalBS += parseFloat(input.value) || 0;
+        });
+
+        document.getElementById('totalBS').value = totalBS.toFixed(2);
+    }
+
+    function clearForm() {
+        if(confirm('¿Está seguro de limpiar todos los campos?')) {
+            document.querySelectorAll('input').forEach(input => {
+                if(input.type !== 'datetime-local') input.value = '';
+            });
+            document.getElementById('tableBody').innerHTML = '';
+            for(let i = 0; i < 10; i++) {
+                addRow();
+            }
+        }
+    }
+</script>
+
+</body>
+</html>

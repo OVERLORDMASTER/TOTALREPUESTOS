@@ -1,33 +1,14 @@
 <header>
-    <h2 class="header-title">inventario de productos</h2>
+    <h2 class="header-title">Inventario de Productos</h2>
     <div class="header-actions inventario-actions">
-        <button class="action-btn btn-cat" data-modal-target="modalCategoria">categorias de productos</button>
-        <button class="action-btn btn-add" data-modal-target="modalProducto">cargar producto</button>
-        <button class="action-btn btn-del" id="btnEliminar">eliminar</button>
-        <button class="action-btn btn-edit" id="btnEditar">editar</button>
+        <button class="action-btn btn-cat" data-modal-target="modalCategoria">Categorias de Productos</button>
+        <button class="action-btn btn-add" data-modal-target="modalProducto">Cargar Producto</button>
+        <button class="action-btn btn-del" id="btnEliminar">Eliminar</button>
+        <button class="action-btn btn-edit" id="btnEditar">Editar</button>
+        <button class="action-btn btn-blue" id="btnPrintInventory" style="grid-column: 1 / -1;">Imprimir Lista de Inventario</button>
         <input type="text" id="productSearch" placeholder="Buscar producto...">
     </div>
 </header>
-<style>
-@media (max-width: 1024px) {
-    .inventario-actions {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
-        width: 100%;
-        align-items: center;
-    }
-
-    .inventario-actions #productSearch {
-        grid-column: 1 / -1;
-        width: 100%;
-    }
-
-    .inventario-actions .action-btn {
-        width: 100%;
-    }
-}
-</style>
 <div class="content-area">
     <div id="productsContainer"></div>
 </div>

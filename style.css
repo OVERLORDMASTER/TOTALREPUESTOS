@@ -163,7 +163,7 @@ aside {
     font-size: 0.95rem; 
     font-weight: 600; 
     cursor: pointer; 
-    text-transform: lowercase;
+    text-transform: uppercase;
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); 
 }
 
@@ -215,6 +215,12 @@ aside {
     flex-grow: 1;
     overflow: hidden; 
     position: relative; /* Para el posicionamiento del botón de menú en vistas sin header */
+    opacity: 1;
+    transition: opacity 0.2s ease-in-out;
+}
+
+.main-wrapper.loading {
+    opacity: 0;
 }
 
 header { 
@@ -274,7 +280,7 @@ header {
     font-size: 0.9rem; 
     cursor: pointer; 
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
-    text-transform: lowercase;
+    text-transform: uppercase;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -289,6 +295,7 @@ header {
 .btn-cat { background-color: var(--btn-blue); } 
 .btn-add { background-color: var(--btn-green); }
 .btn-del { background-color: var(--btn-red); }
+.btn-green { background-color: var(--btn-green); }
 .btn-edit { background-color: var(--btn-yellow); color: var(--btn-edit-text); }
 .btn-yellow { background-color: var(--btn-yellow); color: var(--btn-edit-text); }
 .btn-orange { background-color: var(--btn-orange); }
@@ -324,7 +331,6 @@ header {
     font-size: 0.75rem;
     border-radius: 4px;
     margin-left: 4px;
-    text-transform: none; /* Anula el 'lowercase' de .action-btn */
 }
 
 .header-actions #productSearch,
@@ -450,6 +456,26 @@ header {
     /* Específico para la vista de Inventario: buscador a todo lo ancho */
     .header-actions #productSearch {
         grid-column: 1 / -1;
+    }
+
+    /* Específico para la vista de Inventario en móvil: botones y buscador */
+    @media (max-width: 1024px) {
+        .inventario-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            width: 100%;
+            align-items: center;
+        }
+
+        .inventario-actions #productSearch {
+            grid-column: 1 / -1;
+            width: 100%;
+        }
+
+        .inventario-actions .action-btn {
+            width: 100%;
+        }
     }
 }
 

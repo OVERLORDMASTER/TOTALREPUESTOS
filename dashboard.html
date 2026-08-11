@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Facturación | Control de Inventario</title>
+    <title>TOTAL REPUESTOS C&S</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/socket.io/socket.io.js"></script>
     <!-- PDF Generation Libraries -->
@@ -13,7 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <link rel="stylesheet" href="style.css">
     <link rel="shortcut icon" href="/imagen/" type="image/x-icon">
-    <link rel="icon" type="imageN/x-icon" href="/imagen/logo2.png">
+    <link rel="icon" type="imageN/x-icon" href="/imagen/logo.png">
     <script>
         // Aplica el tema (claro/oscuro) guardado en localStorage para evitar el parpadeo.
         // Este script se ejecuta antes de que se renderice el body.
@@ -25,22 +25,22 @@
 <body>
 
     <!-- Imagen del logo para el PDF, oculta a la vista -->
-    <img id="logo-img" src="/imagen/logo2.png" style="display: none;" alt="Logo">
+    <img id="logo-img" src="/imagen/logo.png" style="display: none;" alt="Logo">
 
     <aside>
         <div class="sidebar-brand">
-            <img class="logo" src="/imagen/logo2.png" alt="Omega Logo">
-            <h2>TOTAL REPUESTOS</h2>
+            <img class="logo" src="/imagen/logo.png" alt="Omega Logo">
+            <h2>TOTAL REPUESTOS C&S</h2>
         </div>
 
         <div class="sidebar-menu">
-            <button class="nav-btn active">inicio</button>
-            <button class="nav-btn">inventario de productos</button>
-            <button class="nav-btn">caja</button>
-            <button class="nav-btn">ventas</button>
-            <button class="nav-btn">devoluciones</button>
-            <button class="nav-btn">reportes</button>
-            <button class="nav-btn">ajustes</button>
+            <button class="nav-btn active">Inicio</button>
+            <button class="nav-btn">Inventario de Productos</button>
+            <button class="nav-btn">Caja</button>
+            <button class="nav-btn">Ventas</button>
+            <button class="nav-btn">Devoluciones</button>
+            <button class="nav-btn">Reportes</button>
+            <button class="nav-btn">Ajustes</button>
         </div>
         
         <div class="exchange-rates-panel" id="exchangeRatesPanel">
@@ -173,9 +173,9 @@
                 <input type="hidden" id="prodEditCodigo">
                 <div class="field-group"><label>Categoría</label><select id="prodCategoria" required><option value="">Selecciona...</option></select></div>
                 <div class="field-group"><label for="prodNombre">Nombre</label><input type="text" id="prodNombre" required></div>
-                <div class="field-group"><label for="prodCodigo">Código</label><input type="text" id="prodCodigo" required></div>
+                <div class="field-group"><label for="prodCodigo">Código</label><input type="text" id="prodCodigo" required maxlength="50"></div>
                 <div class="field-group"><label for="prodCantidad">Cantidad</label><input type="number" id="prodCantidad" required></div>
-                <div class="field-group"><label for="prodUbicacion">Ubicación</label><input type="text" id="prodUbicacion" maxlength="3" placeholder="Ej: A01"></div>
+                <div class="field-group"><label for="prodUbicacion">Ubicación</label><input type="text" id="prodUbicacion" maxlength="10" placeholder="Ej: A01"></div>
                 
                 <!-- Campos de precio manuales, ahora parte de la cuadrícula principal -->
                 <div class="field-group manual-price-field"><label for="prodCostoDolaresBcv">Precio Costo $ BCV</label><input type="number" step="0.01" id="prodCostoDolaresBcv" placeholder="Ej: 8.00"></div>
