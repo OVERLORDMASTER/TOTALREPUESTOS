@@ -300,6 +300,7 @@ header {
 .btn-yellow { background-color: var(--btn-yellow); color: var(--btn-edit-text); }
 .btn-orange { background-color: var(--btn-orange); }
 .btn-blue { background-color: var(--btn-blue); }
+.btn-purple { background-color: var(--btn-purple); }
 .btn-edit.guardar-activo { background-color: var(--btn-blue); color: white; } 
 .btn-pdf {
     background-color: var(--btn-purple);
@@ -346,6 +347,11 @@ header {
     outline: none;
     transition: border-color 0.2s ease;
     width: 280px; /* Ancho unificado para los buscadores */
+}
+
+.header-actions #devolucionVentaSearch {
+    /* Ancho reducido para esta vista específica para que quepa el botón */
+    width: 220px;
 }
 
 .header-actions #productSearch::placeholder,

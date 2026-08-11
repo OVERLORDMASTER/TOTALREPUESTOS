@@ -375,10 +375,11 @@ function renderProducts(productsToRender) {
             card.className = 'product-card';
             card.dataset.codigo = p.codigo;
             card.innerHTML = `
-                <div class="field-group"><label>nombre</label><div class="product-card-value">${p.nombre}</div></div>
                 <div class="field-group"><label>código</label><div class="product-card-value">${p.codigo}</div></div>
-                <div class="field-group"><label>cantidad</label><div class="product-card-value">${formatInteger(p.cantidad)}</div></div>
+                <div class="field-group"><label>nombre</label><div class="product-card-value">${p.nombre}</div></div>
+                <div class="field-group"><label>marca</label><div class="product-card-value">${p.marca || ''}</div></div>
                 <div class="field-group"><label>ubicación</label><div class="product-card-value">${p.ubicacion || ''}</div></div>
+                <div class="field-group"><label>cantidad</label><div class="product-card-value">${formatInteger(p.cantidad)}</div></div>
                 <div class="field-group"><label>precio venta $ bcv</label><div class="product-card-value">${formatCurrency(p.precio_venta_dolares_bcv)}</div></div>
                 <div class="field-group"><label>precio venta bs (bcv)</label><div class="product-card-value">${precioVentaBsBcv}</div></div>
                 <div class="field-group"><label>precio costo $ bcv</label><div class="product-card-value">${formatCurrency(p.precio_costo_dolares_bcv)}</div></div>
@@ -426,6 +427,7 @@ async function handleEditarProducto() {
     document.getElementById('prodNombre').value = productoSeleccionado.nombre;
     document.getElementById('prodCantidad').value = productoSeleccionado.cantidad;
     document.getElementById('prodUbicacion').value = productoSeleccionado.ubicacion || '';
+    document.getElementById('prodMarca').value = productoSeleccionado.marca || '';
 
     // Determinar el modo (manual o calculadora) y mostrar los campos correctos
     const modo = productoSeleccionado.modo_creacion || 'manual';
@@ -2009,6 +2011,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const productData = {
                 categoria: document.getElementById('prodCategoria').value,
                 nombre: document.getElementById('prodNombre').value,
+                marca: document.getElementById('prodMarca').value.trim(),
                 ubicacion: document.getElementById('prodUbicacion').value.trim(),
                 cantidad: parseInt(document.getElementById('prodCantidad').value),
                 precio_costo_dolares_bcv: precioCostoDolaresBcv,

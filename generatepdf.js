@@ -1,4 +1,4 @@
-import { showToast } from '../utils.js';
+import { showToast } from './utils.js';
 
 // --- FUNCIONES DE FORMATO DE NÚMEROS ---
 /**
@@ -41,8 +41,8 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     console.log('Iniciando preparación de HTML para impresión para la venta ID:', venta.id);
 
     const [htmlResponse, cssResponse] = await Promise.all([
-        fetch('source/factura.html'),
-        fetch('source/factura.css')
+        fetch('factura.html'),
+        fetch('factura.css')
     ]).catch(err => {
         showToast('Error de red al cargar recursos de factura.', 'error');
         console.error('Error de red:', err);
@@ -65,10 +65,10 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     styleElement.textContent = cssTemplate;
     doc.head.appendChild(styleElement);
 
-    // Establecer el título de la página, que se usará como nombre de archivo sugerido
+    // Limpiar título de la página
     const titleTag = doc.querySelector('title');
     if (titleTag) {
-        titleTag.textContent = `factura-${venta.id}`;
+        titleTag.textContent = '';
     }
 
     // Convertir el logo a Base64 y embeberlo
@@ -119,18 +119,6 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
             size: auto;
             margin: 10mm;
         }
-        /* Forzar color de texto a negro para datos de cliente y productos */
-        input,
-        #tableBody td div {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-            color: #000 !important;
-        }
-        /* Ocultar el icono de calendario en el input de fecha para la impresión */
-        input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-            display: none;
-            -webkit-appearance: none;
-        }
         #tableBody td div {
             word-wrap: break-word;
             overflow-wrap: break-word;
@@ -140,23 +128,10 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
         #tableBody td .text-left {
             text-align: left;
         }
-        /* HACK: Cubierta para tapar el pie de página del navegador (URL, fecha, etc.) */
-        @media print {
-            .print-footer-cover {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                width: 100%;
-                height: 15mm; /* Altura para cubrir el pie de página, ajustar si es necesario */
-                background-color: white !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-        }
     `;
     doc.head.appendChild(style);
 
-    venta.detalles.forEach(item => {
+    venta.detalles.dates?.forEach?.(item => {}) || venta.detalles.forEach(item => {
         const precioUnitarioBs = formatCurrency(item.precio_unitario * saleRate);
         const subtotalBs = formatCurrency(item.cantidad * item.precio_unitario * saleRate);
         const producto = productosCache.find(p => p.codigo === item.producto_codigo);
@@ -174,11 +149,6 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
         `;
         tableBody.appendChild(row);
     });
-
-    // Añadir el elemento que cubrirá el pie de página
-    const footerCover = doc.createElement('div');
-    footerCover.className = 'print-footer-cover';
-    doc.body.appendChild(footerCover);
 
     doc.querySelector('#totalBS')?.setAttribute('value', formatCurrency(parseFloat(venta.total_bs)));
 
@@ -220,8 +190,8 @@ export async function generarInventarioPDF(productosCache = []) {
     console.log('Iniciando preparación de PDF de inventario...');
 
     const [htmlResponse, cssResponse] = await Promise.all([
-        fetch('source/inventario_pdf.html'),
-        fetch('source/inventario_pdf.css')
+        fetch('inventario_pdf.html'),
+        fetch('inventario_pdf.css')
     ]).catch(err => {
         showToast('Error de red al cargar recursos del PDF.', 'error');
         console.error('Error de red:', err);
@@ -240,12 +210,6 @@ export async function generarInventarioPDF(productosCache = []) {
     styleElement.textContent = cssTemplate;
     doc.head.appendChild(styleElement);
 
-    // Establecer el título de la página, que se usará como nombre de archivo sugerido
-    const titleTagInv = doc.querySelector('title');
-    if (titleTagInv) {
-        titleTagInv.textContent = 'inventario_actual';
-    }
-
     // Convertir el logo a Base64 y embeberlo
     try {
         const logoImg = doc.querySelector('.logo-section img');
@@ -263,11 +227,6 @@ export async function generarInventarioPDF(productosCache = []) {
     doc.querySelector('#totalProductos').textContent = formatInteger(productosCache.length);
     const totalUnidades = productosCache.reduce((sum, p) => sum + p.cantidad, 0);
     doc.querySelector('#totalUnidades').textContent = formatInteger(totalUnidades);
-
-    // Añadir el elemento que cubrirá el pie de página
-    const footerCover = doc.createElement('div');
-    footerCover.className = 'print-footer-cover';
-    doc.body.appendChild(footerCover);
 
     const tableBody = doc.querySelector('#tableBody');
     tableBody.innerHTML = '';
