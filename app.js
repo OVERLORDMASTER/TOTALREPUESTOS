@@ -168,7 +168,7 @@ async function cargarVista(nombreVista) {
 
         // Si hay una función de inicialización, la llamamos
         if (vista.init) {
-            vista.init();
+            await vista.init();
         }
 
         // Si la barra lateral está visible (indicando que estamos en móvil), la cerramos
@@ -931,6 +931,46 @@ function renderizarTablaVentas(listaVentas) {
     document.getElementById('totalVentasUsd').textContent = `$ ${formatCurrency(sumaTotalUsd)}`;
 }
 
+async function _deleteSaleAndRestoreStock(ventaParaEliminar) {
+    // 1. Restaurar stock
+    for (const detalle of ventaParaEliminar.detalles) {
+        // No intentar restaurar stock para items sin código o cantidad (ej. adicionales)
+        if (!detalle.producto_codigo || !detalle.cantidad) continue;
+
+        const { data: productoActual, error: fetchError } = await _supabase
+            .from('productos')
+            .select('cantidad')
+            .eq('codigo', detalle.producto_codigo)
+            .single();
+
+        if (fetchError) {
+            throw new Error(`No se pudo encontrar el producto ${detalle.producto_codigo} para restaurar stock.`);
+        }
+
+        const nuevoStock = productoActual.cantidad + detalle.cantidad;
+        const { error: updateError } = await _supabase
+            .from('productos')
+            .update({ cantidad: nuevoStock })
+            .eq('codigo', detalle.producto_codigo);
+
+        if (updateError) {
+            throw new Error(`Fallo al actualizar el stock para ${detalle.producto_codigo}.`);
+        }
+    }
+
+    // 2. Eliminar detalles de la venta
+    const { error: detalleError } = await _supabase
+        .from('detalle_ventas')
+        .delete()
+        .eq('venta_id', ventaParaEliminar.id);
+
+    if (detalleError) throw new Error('Fallo al eliminar los detalles de la venta.');
+
+    // 3. Eliminar la venta principal
+    const { error: ventaError } = await _supabase.from('ventas').delete().eq('id', ventaParaEliminar.id);
+    if (ventaError) throw new Error('Fallo al eliminar la venta principal.');
+}
+
 async function handleDeleteSale(ventaId) {
     const ventaParaEliminar = ventasCache.find(v => v.id == ventaId);
     if (!ventaParaEliminar) {
@@ -940,44 +980,7 @@ async function handleDeleteSale(ventaId) {
 
     showConfirmation(`¿Eliminar permanentemente la venta #${ventaId}? Esta acción restaurará el stock y no se puede deshacer.`, async () => {
         try {
-            // 1. Restaurar stock
-            for (const detalle of ventaParaEliminar.detalles) {
-                const { data: productoActual, error: fetchError } = await _supabase
-                    .from('productos')
-                    .select('cantidad')
-                    .eq('codigo', detalle.producto_codigo)
-                    .single();
-
-                if (fetchError) {
-                    throw new Error(`No se pudo encontrar el producto ${detalle.producto_codigo} para restaurar stock.`);
-                }
-
-                const nuevoStock = productoActual.cantidad + detalle.cantidad;
-                const { error: updateError } = await _supabase
-                    .from('productos')
-                    .update({ cantidad: nuevoStock })
-                    .eq('codigo', detalle.producto_codigo);
-
-                if (updateError) {
-                    throw new Error(`Fallo al actualizar el stock para ${detalle.producto_codigo}.`);
-                }
-            }
-
-            // 2. Eliminar detalles de la venta
-            const { error: detalleError } = await _supabase
-                .from('detalle_ventas')
-                .delete()
-                .eq('venta_id', ventaId);
-
-            if (detalleError) throw new Error('Fallo al eliminar los detalles de la venta.');
-
-            // 3. Eliminar la venta principal
-            const { error: ventaError } = await _supabase
-                .from('ventas')
-                .delete()
-                .eq('id', ventaId);
-
-            if (ventaError) throw new Error('Fallo al eliminar la venta principal.');
+            await _deleteSaleAndRestoreStock(ventaParaEliminar);
 
             showToast(`Venta #${ventaId} eliminada y stock restaurado.`, 'success');
             
@@ -1747,7 +1750,20 @@ function generarReporteParaPeriodo(periodo, ventas, productosMap) {
 }
 
 // DEVOLUCIONES
-function initVistaDevoluciones() {
+async function initVistaDevoluciones() {
+    // Cargar el caché de productos para poder verificar si un producto es retornable.
+    // Esto es crucial para evitar errores de clave foránea con productos adicionales o eliminados.
+    if (productosCache.length === 0) {
+        try {
+            const { data, error } = await _supabase.from('productos').select('*');
+            if (error) throw error;
+            productosCache = data || [];
+        } catch (error) {
+            console.error("Error al precargar el caché de productos para devoluciones:", error);
+            showToast('No se pudo cargar la lista de productos, la función de devolución puede fallar.', 'error');
+        }
+    }
+
     document.getElementById('btnBuscarVenta').addEventListener('click', buscarVentaParaDevolucion);
     document.getElementById('devolucionVentaSearch').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
@@ -1846,8 +1862,7 @@ function renderizarVentaParaDevolucion(venta, devolucionesMap) {
             <p>Cliente: ${venta.cliente_nombre} - Fecha: ${new Date(venta.fecha).toLocaleString()}</p>
         </div>
         <div class="devolucion-actions-summary">
-            <button id="btnAnularVentaCompleta" data-venta-id="${venta.id}" class="action-btn btn-del">Anular Venta Completa</button>
-            <button id="btnRegistrarDevolucionesSeleccionadas" data-venta-id="${venta.id}" class="action-btn btn-orange">Registrar Devoluciones Seleccionadas</button>
+            <button id="btnRegistrarDevolucion" data-venta-id="${venta.id}" class="action-btn btn-green">Registrar Devolución</button>
         </div>
         <div class="devolucion-items-container">
             ${itemsHtml}
@@ -1855,20 +1870,10 @@ function renderizarVentaParaDevolucion(venta, devolucionesMap) {
     `;
 }
 
-async function handleAnularVentaCompleta(ventaId) {
-    const ventaParaAnular = ventasCache.find(v => v.id == ventaId);
-    if (!ventaParaAnular) {
-        showToast('No se encontró la venta para anular.', 'error');
-        return;
-    }
-    // Reutilizamos la lógica de handleDeleteSale, ya que anular una venta completa
-    // tiene el mismo efecto: restaurar stock y eliminar el registro de la venta.
-    // El mensaje de confirmación de handleDeleteSale es apropiado.
-    await handleDeleteSale(ventaId);
-}
-
-async function handleRegistrarDevolucionesSeleccionadas(ventaId) {
+async function handleRegistrarDevolucion(ventaId) {
     const itemsSeleccionados = document.querySelectorAll('.devolucion-item-checkbox:checked');
+    const venta = ventasCache.find(v => v.id == ventaId);
+
     if (itemsSeleccionados.length === 0) {
         showToast('No has seleccionado ningún producto para devolver.', 'info');
         return;
@@ -1877,13 +1882,35 @@ async function handleRegistrarDevolucionesSeleccionadas(ventaId) {
     const devolucionesParaProcesar = [];
     let errorValidacion = false;
 
+    // Determinar si es una devolución completa
+    const allReturnableItems = document.querySelectorAll('.devolucion-item-card:not(.disabled)');
+    let isFullReturn = allReturnableItems.length > 0 && itemsSeleccionados.length === allReturnableItems.length;
+
+    // Calcular la tasa de cambio de la venta original para registrar los montos devueltos
+    const saleRate = (venta.total_usd > 0) ? (venta.total_bs / venta.total_usd) : oficialRate;
+
     itemsSeleccionados.forEach(checkbox => {
         if (errorValidacion) return;
 
         const detalleId = checkbox.dataset.detalleId;
+        const detalleVenta = venta.detalles.find(d => d.id == detalleId);
+        if (!detalleVenta) {
+            showToast(`Error interno: no se encontró el detalle de venta.`, 'error');
+            errorValidacion = true;
+            return;
+        }
+
         const itemCard = document.getElementById(`devolucion-item-${detalleId}`);
         const productoCodigo = itemCard.dataset.productoCodigo;
         const maxCantidad = parseInt(itemCard.dataset.maxCantidad, 10);
+
+        // Verificar si el producto existe en el caché de productos antes de procesar la devolución
+        const productoEnCache = productosCache.find(p => p.codigo === productoCodigo);
+        if (!productoEnCache) {
+            showToast(`El producto con código ${productoCodigo} no existe en el inventario y no puede ser devuelto.`, 'error');
+            errorValidacion = true;
+            return;
+        }
 
         const cantidadInput = document.getElementById(`cantidad-devuelta-${detalleId}`);
         const motivoInput = document.getElementById(`motivo-${detalleId}`);
@@ -1897,53 +1924,87 @@ async function handleRegistrarDevolucionesSeleccionadas(ventaId) {
         } else if (cantidadADevolver > maxCantidad) {
             showToast(`No puedes devolver más de ${maxCantidad} unidades del producto ${productoCodigo}.`, 'error');
             errorValidacion = true;
+        } else if (cantidadADevolver < maxCantidad) {
+            // Si incluso un artículo no se devuelve en su totalidad, no es una devolución completa.
+            isFullReturn = false;
         } else if (!motivo) {
             showToast(`Debes especificar un motivo para la devolución del producto ${productoCodigo}.`, 'error');
             errorValidacion = true;
         } else {
+            const monto_usd_devolucion = cantidadADevolver * detalleVenta.precio_unitario;
+            const monto_bs_devolucion = monto_usd_devolucion * saleRate;
+
             devolucionesParaProcesar.push({
                 venta_id: ventaId,
                 producto_codigo: productoCodigo,
+                producto_nombre: detalleVenta.producto_nombre, // Guardar el nombre para el historial
                 cantidad_devuelta: cantidadADevolver,
-                motivo: motivo
+                motivo: motivo,
+                cliente_nombre: venta.cliente_nombre,
+                monto_usd_devolucion: monto_usd_devolucion,
+                monto_bs_devolucion: monto_bs_devolucion
             });
         }
     });
 
     if (errorValidacion) return;
 
-    const btn = document.getElementById('btnRegistrarDevolucionesSeleccionadas');
-    const originalText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Procesando...';
+    if (isFullReturn) {
+        showConfirmation('Está devolviendo todos los productos. La venta original se eliminará y el stock se restaurará. ¿Continuar?', async () => {
+            const btn = document.getElementById('btnRegistrarDevolucion');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Procesando...';
+            try {
+                // 1. Registrar las devoluciones para mantener el historial
+                const { error: devolucionError } = await _supabase.from('devoluciones').insert(devolucionesParaProcesar);
+                if (devolucionError) throw devolucionError;
 
-    try {
-        // Registrar todas las devoluciones
-        const { error: devolucionError } = await _supabase.from('devoluciones').insert(devolucionesParaProcesar);
-        if (devolucionError) throw devolucionError;
+                // 2. Eliminar la venta y restaurar el stock de todos sus productos
+                await _deleteSaleAndRestoreStock(venta);
 
-        // Actualizar el stock para cada producto devuelto
-        for (const dev of devolucionesParaProcesar) {
-            const { data: producto, error: productoError } = await _supabase.from('productos').select('cantidad').eq('codigo', dev.producto_codigo).single();
-            if (productoError) throw new Error(`No se pudo obtener el stock actual del producto ${dev.producto_codigo}.`);
+                showToast('Devolución total registrada. La venta ha sido eliminada.', 'success');
+                document.getElementById('devolucionResultContainer').innerHTML = ''; // Limpiar la vista
+                cargarHistorialDevoluciones(); // Recargar el historial de devoluciones
+                socket.emit('cambio-dato', { type: 'products' });
+                socket.emit('cambio-dato', { type: 'devoluciones' });
+                socket.emit('cambio-dato', { type: 'ventas' }); // Notificar que una venta fue eliminada
+            } catch (error) {
+                console.error('Error en devolución total:', error);
+                showToast(`Error: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        });
+    } else { // Lógica para devolución parcial
+        const btn = document.getElementById('btnRegistrarDevolucion');
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Procesando...';
+        try {
+            const { error: devolucionError } = await _supabase.from('devoluciones').insert(devolucionesParaProcesar);
+            if (devolucionError) throw devolucionError;
 
-            const nuevoStock = producto.cantidad + dev.cantidad_devuelta;
-            const { error: updateError } = await _supabase.from('productos').update({ cantidad: nuevoStock }).eq('codigo', dev.producto_codigo);
-            if (updateError) throw updateError;
+            for (const dev of devolucionesParaProcesar) {
+                const { data: producto, error: productoError } = await _supabase.from('productos').select('cantidad').eq('codigo', dev.producto_codigo).single();
+                if (productoError) throw new Error(`No se pudo obtener el stock para ${dev.producto_codigo}.`);
+                const nuevoStock = producto.cantidad + dev.cantidad_devuelta;
+                const { error: updateError } = await _supabase.from('productos').update({ cantidad: nuevoStock }).eq('codigo', dev.producto_codigo);
+                if (updateError) throw updateError;
+            }
+            showToast('Devolución parcial registrada y stock actualizado.', 'success');
+            buscarVentaParaDevolucion();
+            cargarHistorialDevoluciones();
+            socket.emit('cambio-dato', { type: 'products' });
+            socket.emit('cambio-dato', { type: 'devoluciones' });
+        } catch (error) {
+            console.error('Error en devolución parcial:', error);
+            showToast(`Error: ${error.message}`, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
         }
-
-        showToast('Devoluciones registradas y stock actualizado.', 'success');
-        buscarVentaParaDevolucion(); // Recargar la vista de la venta
-        cargarHistorialDevoluciones(); // Recargar el historial
-        socket.emit('cambio-dato', { type: 'products' });
-        socket.emit('cambio-dato', { type: 'devoluciones' });
-
-    } catch (error) {
-        console.error('Error al registrar las devoluciones:', error);
-        showToast(`Error: ${error.message}`, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.textContent = originalText;
     }
 }
 
@@ -1951,8 +2012,8 @@ async function cargarHistorialDevoluciones() {
     const container = document.getElementById('historialDevolucionesContent');
     if (!container) return;
     container.innerHTML = '<p style="text-align: center; padding: 10px; color: var(--text-muted);">Cargando historial...</p>';
-
-    const { data, error } = await _supabase.from('devoluciones').select(`*, productos (nombre)`).order('fecha_devolucion', { ascending: false }).limit(50);
+    
+    const { data, error } = await _supabase.from('devoluciones').select(`*`).order('fecha_devolucion', { ascending: false }).limit(50);
 
     if (error) { container.innerHTML = `<p style="color: var(--btn-red);">Error al cargar el historial.</p>`; return; }
     if (!data || data.length === 0) { container.innerHTML = '<p style="text-align: center; padding: 10px; color: var(--text-muted);">No hay devoluciones registradas.</p>'; return; }
@@ -1961,10 +2022,22 @@ async function cargarHistorialDevoluciones() {
         <div class="historial-devolucion-item">
             <div class="historial-info">
                 <span class="historial-fecha">${new Date(dev.fecha_devolucion).toLocaleString()}</span>
-                <strong>${(dev.productos ? dev.productos.nombre : 'Producto no encontrado')} (x${dev.cantidad_devuelta})</strong>
                 <span class="historial-venta-id">Venta ID: #${dev.venta_id}</span>
             </div>
-            <p class="historial-motivo">Motivo: ${dev.motivo}</p>
+            <div class="historial-body">
+                <div class="historial-producto">
+                    <strong>${dev.producto_nombre || 'Nombre no registrado'} (x${dev.cantidad_devuelta})</strong>
+                    <p class="historial-motivo">Motivo: ${dev.motivo || 'No especificado'}</p>
+                </div>
+                <div class="historial-cliente">
+                    <span>Cliente:</span>
+                    <strong>${dev.cliente_nombre || 'N/A'}</strong>
+                </div>
+                <div class="historial-montos">
+                    <span>$ ${formatCurrency(dev.monto_usd_devolucion || 0)}</span>
+                    <span>Bs ${formatCurrency(dev.monto_bs_devolucion || 0)}</span>
+                </div>
+            </div>
         </div>
     `).join('');
 
@@ -2272,8 +2345,8 @@ document.addEventListener('click', (e) => {
     }
 
     // Botones de acción en la vista de devoluciones (requieren contraseña)
-    if (e.target.id === 'btnAnularVentaCompleta' || e.target.id === 'btnRegistrarDevolucionesSeleccionadas') {
-        pendingAction = e.target.id === 'btnAnularVentaCompleta' ? 'anular_venta' : 'registrar_devoluciones';
+    if (e.target.id === 'btnRegistrarDevolucion') {
+        pendingAction = 'registrar_devolucion';
         pendingActionId = e.target.dataset.ventaId;
         document.getElementById('modalPasswordVenta').classList.add('active');
         document.getElementById('adminPassword').focus();
@@ -3034,10 +3107,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     handleDeleteSale(pendingActionId);
                 } else if (pendingAction === 'abonar') {
                     handleAbrirModalAbono(pendingActionId);
-                } else if (pendingAction === 'anular_venta') {
-                    handleAnularVentaCompleta(pendingActionId); // Llama a la función directamente
-                } else if (pendingAction === 'registrar_devoluciones') {
-                    handleRegistrarDevolucionesSeleccionadas(pendingActionId); // Llama a la función directamente
+                } else if (pendingAction === 'registrar_devolucion') {
+                    handleRegistrarDevolucion(pendingActionId);
                 }
 
             } catch (err) {

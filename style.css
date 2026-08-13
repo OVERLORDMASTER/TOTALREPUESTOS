@@ -536,6 +536,14 @@ header {
         white-space: nowrap; /* Evita que el texto del botón se parta */
     }
     /* --- FIN: Ajustes para botones de acción en tabla de Ventas móvil --- */
+
+    .historial-body {
+        grid-template-columns: 1fr !important; /* Apila las secciones en móvil */
+        gap: 10px !important;
+    }
+    .historial-cliente, .historial-montos {
+        text-align: left !important; /* Alinea el texto a la izquierda en móvil */
+    }
 }
 
 /* ==========================================================================
@@ -1176,27 +1184,59 @@ header {
     padding: 10px 15px;
     border-radius: 6px;
     border-left: 4px solid var(--btn-orange);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
-.historial-info { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+.historial-info { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
 .historial-fecha { font-size: 0.75rem; color: var(--text-muted); }
-.historial-info strong {
-    font-size: 0.9rem;
-    overflow-wrap: break-word;
-    word-break: break-word;
-    min-width: 0; /* Permite que el elemento flex se encoja y envuelva el texto */
-}
 .historial-venta-id { font-size: 0.8rem; color: var(--btn-yellow); font-family: monospace; }
+
+.historial-body {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 15px;
+    align-items: center;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color);
+}
+
+.historial-producto strong {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
 .historial-motivo {
     font-size: 0.85rem;
-    color: var(--text-primary);
-    margin-top: 5px;
-    padding-left: 10px;
-    border-left: 2px solid var(--border-color);
+    color: var(--text-muted);
+    margin-top: 4px;
     overflow-wrap: break-word;
     word-break: break-word;
     white-space: normal;
+    font-style: italic;
 }
 
+.historial-cliente, .historial-montos {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: right;
+}
+
+.historial-cliente span, .historial-montos span:first-child {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.historial-cliente strong, .historial-montos span:last-child {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.historial-montos span:last-child {
+    color: var(--btn-green);
+}
 
 /* ==========================================================================
    6. VISTA DE VENTAS (TABLA HISTORIAL)
