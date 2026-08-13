@@ -3,134 +3,167 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOTAL REPUESTOS C&S | Login</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="shortcut icon" href="/imagen/logo.png" type="image/x-icon">
-    <script>
-        // Aplica el tema (claro/oscuro) guardado en localStorage para evitar el parpadeo.
-        // Este script se ejecuta antes de que se renderice el body.
-        const THEME_KEY = 'appTheme';
-        const savedTheme = localStorage.getItem(THEME_KEY) || 'dark';
-        document.documentElement.dataset.theme = savedTheme;
-    </script>
+    <title>Video Automático con Sonido</title>
+    <style>
+        /* Reseteo básico para ocupar toda la pantalla */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+        }
+
+        /* Contenedor principal que ocupa toda la ventana */
+        .video-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Video de fondo a pantalla completa */
+        .video-container video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Asegura que cubra toda la pantalla sin deformarse */
+            z-index: 1;
+        }
+
+        /* Capa opcional de texto superpuesto */
+        .content-overlay {
+            position: relative;
+            z-index: 2;
+            color: #fff;
+            text-align: center;
+            text-shadow: 0px 2px 4px rgba(0, 0, 0, 0.8);
+            pointer-events: none; /* Permite hacer clic a través del texto si fuera necesario */
+        }
+
+        .content-overlay h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
+        .content-overlay p {
+            font-size: 1.2rem;
+        }
+
+        /* Estilos para el overlay de login */
+        #login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            color: #333;
+        }
+
+        #login-form {
+            background: #fff;
+            padding: 40px 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            width: 300px;
+            text-align: center;
+        }
+
+        #login-form h2 {
+            margin-bottom: 20px;
+        }
+
+        #login-form input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        #login-form button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+    </style>
 </head>
-<body class="login-page">
+<body>
 
-    <div class="login-wrapper">
-        <div class="login-box">
+    <div class="video-container">
+        <!-- 
+          Atributos clave:
+          - autoplay: Inicia la reproducción sola.
+          - controls: Muestra los controles por si el navegador bloquea el autoplay con sonido.
+          - loop: Opcional, repite el video infinitamente.
+          - playsinline: Necesario para dispositivos móviles.
+        -->
+        <video id="bg-video" muted controls loop playsinline>
+            <source src="assets/video.mp4" type="video/mp4">
+            Tu navegador no soporta la reproducción de video.
+        </video>
 
-            <img class="logo" src="/imagen/logo.png" alt="">
-
-            <h2>TOTAL REPUESTOS C&S</h2>
-            <p class="login-sub">Ingresa tus credenciales para continuar</p>
-
-            <form class="login-input-group" id="loginForm">
-                <div class="field-group" style="text-align: left;">
-                    <label for="loginUser" style="font-size: 0.8rem; color: #666; margin-bottom: 5px;">Usuario</label>
-                    <input type="text" id="loginUser" placeholder="Tu nombre de usuario" autocomplete="off" autofocus required>
-                </div>
-                <div class="field-group" style="text-align: left;">
-                    <label for="loginPass" style="font-size: 0.8rem; color: #666; margin-bottom: 5px;">Contraseña</label>
-                    <input type="password" id="loginPass" placeholder="Tu contraseña" required>
-                </div>
-            </form>
-            
-            <button id="loginBtn">Iniciar Sesión</button>
-
-            <div id="loginMessage" class="message"></div>
+        <!-- Opcional: Texto encima del video -->
+        <div class="content-overlay">
+            <h1>Bienvenidos</h1>
+            <p>pura bendicion</p>
         </div>
     </div>
 
+    <!-- Overlay de Login -->
+    <div id="login-overlay">
+        <form id="login-form">
+            <h2>Iniciar Sesión</h2>
+            <input type="text" id="username" placeholder="Usuario" required>
+            <input type="password" id="password" placeholder="Contraseña" required>
+            <button type="submit">Entrar</button>
+        </form>
+    </div>
+
     <script>
-        // Verificación de protocolo: Asegura que la página se sirva a través de HTTP.
-        if (window.location.protocol === 'file:') {
-            document.body.innerHTML = `
-                <div class="login-wrapper">
-                    <div class="login-box" style="border-left: 5px solid #dc3545; text-align: left;">
-                        <h2 style="color: #dc3545;">Error de Acceso</h2>
-                        <p class="login-sub">No puedes abrir este archivo directamente. Debes acceder a través del servidor.</p>
-                        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-                        <p>Por favor, inicia el servidor con <code>node server.js</code> y abre <a href="http://localhost:3000">http://localhost:3000</a> en tu navegador.</p>
-                    </div>
-                </div>`;
-        }
+        // Seleccionar los elementos del DOM
+        const loginOverlay = document.getElementById('login-overlay');
+        const loginForm = document.getElementById('login-form');
+        const video = document.getElementById('bg-video');
 
-        // Si ya hay sesión guardada, redirigir directo al dashboard
-        if (localStorage.getItem('usuario')) {
-            window.location.href = 'dashboard.html';
-        }
+        // Añadir un evento al formulario
+        loginForm.addEventListener('submit', function(event) {
+            // Prevenir el comportamiento por defecto del formulario (recargar la página)
+            event.preventDefault();
 
-        const loginUser = document.getElementById('loginUser');
-        const loginPass = document.getElementById('loginPass');
-        const loginBtn = document.getElementById('loginBtn');
-        const loginMessage = document.getElementById('loginMessage');
+            const usernameInput = document.getElementById('username').value;
+            const passwordInput = document.getElementById('password').value;
 
-        async function intentarLogin() {
-            const username = loginUser.value.trim();
-            const password = loginPass.value.trim();
-
-            if (!username || !password) {
-                loginMessage.textContent = '❌ Completa todos los campos.';
-                loginMessage.className = 'message error';
-                loginMessage.style.display = 'block';
-                return;
+            // Verificar las credenciales
+            if (usernameInput === 'user' && passwordInput === '1234') {
+                // Si son correctas, ocultar el login y reproducir el video
+                loginOverlay.style.display = 'none';
+                video.play();
+            } else {
+                // Si son incorrectas, mostrar una alerta
+                alert('Usuario o contraseña incorrectos.');
             }
-
-            const originalButtonText = loginBtn.textContent;
-            loginBtn.textContent = 'Verificando...';
-            loginBtn.disabled = true;
-            loginUser.disabled = true;
-            loginPass.disabled = true;
-            loginMessage.style.display = 'none';
-
-            try {
-                const response = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.success) {
-                    loginMessage.textContent = '✅ ' + (data.message || "Acceso concedido") + '. Redirigiendo...';
-                    loginMessage.className = 'message success';
-                    loginMessage.style.display = 'block';
-
-                    // Guardar la sesión localmente
-                    localStorage.setItem('usuario', username);
-
-                    // Redirigir después de 1 segundo
-                    setTimeout(() => {
-                        window.location.href = 'dashboard.html';
-                    }, 1000);
-
-                } else {
-                    throw new Error(data.message || "Acceso denegado");
-                }
-
-            } catch (error) {
-                loginMessage.textContent = '❌ ' + error.message;
-                loginMessage.className = 'message error';
-                loginMessage.style.display = 'block';
-
-                loginUser.disabled = false;
-                loginPass.disabled = false;
-                loginBtn.textContent = originalButtonText;
-                loginBtn.disabled = false;
-            }
-        }
-
-        loginBtn.addEventListener('click', intentarLogin);
-        
-        loginPass.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); intentarLogin(); }
-        });
-
-        loginUser.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); loginPass.focus(); }
         });
     </script>
-
 </body>
 </html>
