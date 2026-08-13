@@ -2475,7 +2475,6 @@ async function handleAbrirModalVenta() {
     document.getElementById('modalTotalUsd').textContent = `$ ${formatCurrency(totalUsd)}`;
     document.getElementById('modalTotalBs').textContent = `Bs ${formatCurrency(totalBs)}`;
     document.getElementById('lblTasaBcvBase').textContent = formatCurrency(oficialRate);
-    document.getElementById('lblTasaUsdtRef').textContent = formatCurrency(paraleloRate);
 
     const modal = document.getElementById('modalVenta');
     const footer = modal.querySelector('.modal-footer, .modal-buttons');
