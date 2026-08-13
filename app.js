@@ -1756,17 +1756,6 @@ function initVistaDevoluciones() {
         }
     });
     cargarHistorialDevoluciones();
-
-    // Event listeners para los nuevos botones en el contenedor de resultados de devolución
-    document.getElementById('devolucionResultContainer').addEventListener('click', async (e) => {
-        if (e.target.id === 'btnAnularVentaCompleta') {
-            const ventaId = e.target.dataset.ventaId;
-            if (ventaId) handleAnularVentaCompleta(ventaId);
-        } else if (e.target.id === 'btnRegistrarDevolucionesSeleccionadas') {
-            const ventaId = e.target.dataset.ventaId;
-            if (ventaId) handleRegistrarDevolucionesSeleccionadas(ventaId);
-        }
-    });
 }
 
 async function buscarVentaParaDevolucion() {
@@ -1806,7 +1795,7 @@ async function buscarVentaParaDevolucion() {
 
 function renderizarVentaParaDevolucion(venta, devolucionesMap) {
     const container = document.getElementById('devolucionResultContainer');
-    
+
     let itemsHtml = venta.detalles.map(item => {
         const productoEnCache = productosCache.find(p => p.codigo === item.producto_codigo);
         const cantidadYaDevuelta = devolucionesMap[item.producto_codigo] || 0;
@@ -1828,7 +1817,10 @@ function renderizarVentaParaDevolucion(venta, devolucionesMap) {
         }
 
         return `
-            <div class="devolucion-item-card" id="devolucion-item-${item.id}">
+            <div class="devolucion-item-card" id="devolucion-item-${item.id}" data-producto-codigo="${item.producto_codigo}" data-max-cantidad="${cantidadMaxADevolver}">
+                <div class="item-selection">
+                    <input type="checkbox" class="devolucion-item-checkbox" data-detalle-id="${item.id}">
+                </div>
                 <div class="item-info">
                     <strong>${item.producto_nombre}</strong>
                     <span>Código: ${item.producto_codigo}</span>
@@ -1837,19 +1829,12 @@ function renderizarVentaParaDevolucion(venta, devolucionesMap) {
                 <div class="item-actions">
                     <div class="field-group">
                         <label for="cantidad-devuelta-${item.id}">Cant. a Devolver</label>
-                        <input type="number" id="cantidad-devuelta-${item.id}" min="1" max="${cantidadMaxADevolver}" value="1">
+                        <input type="number" class="cantidad-a-devolver" id="cantidad-devuelta-${item.id}" min="1" max="${cantidadMaxADevolver}" value="1">
                     </div>
                     <div class="field-group" style="flex-grow: 1;">
                         <label for="motivo-${item.id}">Motivo de la devolución</label>
-                        <input type="text" id="motivo-${item.id}" placeholder="Ej: Producto defectuoso">
+                        <input type="text" class="motivo-devolucion" id="motivo-${item.id}" placeholder="Ej: Producto defectuoso">
                     </div>
-                    <button class="action-btn btn-red btn-registrar-devolucion" 
-                            data-venta-id="${venta.id}" 
-                            data-detalle-id="${item.id}"
-                            data-producto-codigo="${item.producto_codigo}"
-                            data-max-cantidad="${cantidadMaxADevolver}">
-                        Registrar Devolución
-                    </button>
                 </div>
             </div>
         `;
@@ -1860,52 +1845,105 @@ function renderizarVentaParaDevolucion(venta, devolucionesMap) {
             <h3>Venta #${venta.id}</h3>
             <p>Cliente: ${venta.cliente_nombre} - Fecha: ${new Date(venta.fecha).toLocaleString()}</p>
         </div>
+        <div class="devolucion-actions-summary">
+            <button id="btnAnularVentaCompleta" data-venta-id="${venta.id}" class="action-btn btn-del">Anular Venta Completa</button>
+            <button id="btnRegistrarDevolucionesSeleccionadas" data-venta-id="${venta.id}" class="action-btn btn-orange">Registrar Devoluciones Seleccionadas</button>
+        </div>
         <div class="devolucion-items-container">
             ${itemsHtml}
         </div>
     `;
 }
 
-async function handleRegistrarDevolucion(button) {
-    const ventaId = button.dataset.ventaId;
-    const detalleId = button.dataset.detalleId;
-    const productoCodigo = button.dataset.productoCodigo;
-    const maxCantidad = parseInt(button.dataset.maxCantidad, 10);
+async function handleAnularVentaCompleta(ventaId) {
+    const ventaParaAnular = ventasCache.find(v => v.id == ventaId);
+    if (!ventaParaAnular) {
+        showToast('No se encontró la venta para anular.', 'error');
+        return;
+    }
+    // Reutilizamos la lógica de handleDeleteSale, ya que anular una venta completa
+    // tiene el mismo efecto: restaurar stock y eliminar el registro de la venta.
+    // El mensaje de confirmación de handleDeleteSale es apropiado.
+    await handleDeleteSale(ventaId);
+}
 
-    const cantidadInput = document.getElementById(`cantidad-devuelta-${detalleId}`);
-    const motivoInput = document.getElementById(`motivo-${detalleId}`);
+async function handleRegistrarDevolucionesSeleccionadas(ventaId) {
+    const itemsSeleccionados = document.querySelectorAll('.devolucion-item-checkbox:checked');
+    if (itemsSeleccionados.length === 0) {
+        showToast('No has seleccionado ningún producto para devolver.', 'info');
+        return;
+    }
 
-    const cantidadADevolver = parseInt(cantidadInput.value, 10);
-    const motivo = motivoInput.value.trim();
+    const devolucionesParaProcesar = [];
+    let errorValidacion = false;
 
-    if (isNaN(cantidadADevolver) || cantidadADevolver <= 0) { showToast('La cantidad a devolver debe ser mayor que cero.', 'error'); return; }
-    if (cantidadADevolver > maxCantidad) { showToast(`No puedes devolver más de ${maxCantidad} unidades.`, 'error'); return; }
-    if (!motivo) { showToast('Debes especificar un motivo para la devolución.', 'error'); return; }
+    itemsSeleccionados.forEach(checkbox => {
+        if (errorValidacion) return;
 
-    button.disabled = true;
-    button.textContent = 'Procesando...';
+        const detalleId = checkbox.dataset.detalleId;
+        const itemCard = document.getElementById(`devolucion-item-${detalleId}`);
+        const productoCodigo = itemCard.dataset.productoCodigo;
+        const maxCantidad = parseInt(itemCard.dataset.maxCantidad, 10);
+
+        const cantidadInput = document.getElementById(`cantidad-devuelta-${detalleId}`);
+        const motivoInput = document.getElementById(`motivo-${detalleId}`);
+        
+        const cantidadADevolver = parseInt(cantidadInput.value, 10);
+        const motivo = motivoInput.value.trim();
+
+        if (isNaN(cantidadADevolver) || cantidadADevolver <= 0) {
+            showToast(`La cantidad a devolver para el producto ${productoCodigo} debe ser mayor que cero.`, 'error');
+            errorValidacion = true;
+        } else if (cantidadADevolver > maxCantidad) {
+            showToast(`No puedes devolver más de ${maxCantidad} unidades del producto ${productoCodigo}.`, 'error');
+            errorValidacion = true;
+        } else if (!motivo) {
+            showToast(`Debes especificar un motivo para la devolución del producto ${productoCodigo}.`, 'error');
+            errorValidacion = true;
+        } else {
+            devolucionesParaProcesar.push({
+                venta_id: ventaId,
+                producto_codigo: productoCodigo,
+                cantidad_devuelta: cantidadADevolver,
+                motivo: motivo
+            });
+        }
+    });
+
+    if (errorValidacion) return;
+
+    const btn = document.getElementById('btnRegistrarDevolucionesSeleccionadas');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Procesando...';
 
     try {
-        const { error: devolucionError } = await _supabase.from('devoluciones').insert({ venta_id: ventaId, producto_codigo: productoCodigo, cantidad_devuelta: cantidadADevolver, motivo: motivo });
+        // Registrar todas las devoluciones
+        const { error: devolucionError } = await _supabase.from('devoluciones').insert(devolucionesParaProcesar);
         if (devolucionError) throw devolucionError;
 
-        const { data: producto, error: productoError } = await _supabase.from('productos').select('cantidad').eq('codigo', productoCodigo).single();
-        if (productoError) throw new Error('No se pudo obtener el stock actual del producto.');
+        // Actualizar el stock para cada producto devuelto
+        for (const dev of devolucionesParaProcesar) {
+            const { data: producto, error: productoError } = await _supabase.from('productos').select('cantidad').eq('codigo', dev.producto_codigo).single();
+            if (productoError) throw new Error(`No se pudo obtener el stock actual del producto ${dev.producto_codigo}.`);
 
-        const nuevoStock = producto.cantidad + cantidadADevolver;
-        const { error: updateError } = await _supabase.from('productos').update({ cantidad: nuevoStock }).eq('codigo', productoCodigo);
-        if (updateError) throw updateError;
+            const nuevoStock = producto.cantidad + dev.cantidad_devuelta;
+            const { error: updateError } = await _supabase.from('productos').update({ cantidad: nuevoStock }).eq('codigo', dev.producto_codigo);
+            if (updateError) throw updateError;
+        }
 
-        showToast('Devolución registrada y stock actualizado.', 'success');
+        showToast('Devoluciones registradas y stock actualizado.', 'success');
         buscarVentaParaDevolucion(); // Recargar la vista de la venta
         cargarHistorialDevoluciones(); // Recargar el historial
         socket.emit('cambio-dato', { type: 'products' });
         socket.emit('cambio-dato', { type: 'devoluciones' });
+
     } catch (error) {
-        console.error('Error al registrar la devolución:', error);
+        console.error('Error al registrar las devoluciones:', error);
         showToast(`Error: ${error.message}`, 'error');
-        button.disabled = false;
-        button.textContent = 'Registrar Devolución';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
     }
 }
 
@@ -2179,39 +2217,6 @@ document.addEventListener('click', (e) => {
         }
     }
     // --- FIN: Lógica para modal de pago múltiple ---
-
-
-
-
-
-    // Modales
-    if (e.target.matches('[data-modal-target]')) {
-        const modalId = e.target.dataset.modalTarget;
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            if (modalId === 'modalCategoria') initModalCategorias();
-            if (modalId === 'modalProducto') initModalProducto();
-            modal.classList.add('active');
-        }
-    }
-    if (e.target.matches('[data-modal-close]')) {
-        const modal = e.target.closest('.modal-overlay');
-        if (modal) modal.classList.remove('active');
-    }
-
-    // Botones de la vista CAJA
-    if (e.target.matches('#btnCajaLimpiar')) {
-        showConfirmation('¿Estás seguro de que quieres limpiar la caja?', () => {
-            productosParaLlevar = [];
-            renderizarParaLlevar();
-            showToast('Caja limpiada.', 'success');
-        });
-    }
-    if (e.target.matches('#btnCajaVender')) {
-        handleAbrirModalVenta();
-    }
-
-
     // Boton de generar PDF en la vista de ventas
     if (e.target.matches('.btn-pdf')) { // Manejar la generación de PDF de forma asíncrona
         handlePdfButtonClick(e.target);
@@ -2809,6 +2814,31 @@ async function actualizarSelectProductos() {
 // --- INICIALIZACIÓN DE LA APP ---
 
 document.addEventListener('DOMContentLoaded', () => {
+    // --- LÓGICA DE AUTENTICACIÓN Y UI DE USUARIO ---
+    const username = localStorage.getItem('usuario');
+    const usernameDisplay = document.getElementById('usernameDisplay');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    if (!username) {
+        // Si no hay un nombre de usuario en localStorage, redirigir al login.
+        // Esto previene el acceso directo al dashboard sin haber iniciado sesión.
+        // Se asume que la página de login es 'index.html' o la raíz.
+        window.location.href = '/';
+        return; // Detener la ejecución para evitar cargar el resto del dashboard
+    } else {
+        // Si hay un usuario, mostrar su nombre.
+        if (usernameDisplay) {
+            usernameDisplay.textContent = username;
+        }
+    }
+
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('usuario');
+            window.location.href = '/';
+        });
+    }
+
     // --- LÓGICA DE LA BARRA LATERAL RESPONSIVA ---
     const sidebarOverlay = document.getElementById('content-overlay');
     if (sidebarOverlay) {
