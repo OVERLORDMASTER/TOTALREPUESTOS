@@ -322,16 +322,28 @@ header {
     cursor: pointer;
     border: none;
     font-weight: 600;
-    margin-left: 4px;
 }
 .btn-edit-venta:hover { opacity: 0.85; }
 
 .btn-delete-venta {
     /* Anula el padding grande de .action-btn para que coincida con los otros botones de acción de la tabla */
-    padding: 4px 8px;
-    font-size: 0.75rem;
-    border-radius: 4px;
-    margin-left: 4px;
+    /* Estilos ahora manejados por .venta-accion-btn */
+}
+
+/* NUEVO: Estilo unificado para los botones de acción pequeños en la tabla de ventas */
+.venta-accion-btn {
+    padding: 6px 10px !important;
+    font-size: 0.75rem !important;
+    border-radius: 4px !important;
+    font-weight: 600 !important;
+    white-space: nowrap;
+}
+
+/* Eliminar margen que causaba separación */
+.btn-edit-venta,
+.btn-delete-venta,
+.btn-abonar-venta {
+    margin-left: 0 !important;
 }
 
 .header-actions #productSearch,
@@ -439,11 +451,15 @@ header {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 10px;
+        width: 100%; /* Asegura que el contenedor de acciones ocupe todo el ancho */
     }
 
     .caja-actions #cajaProductSearch {
         grid-column: 1 / -1; /* Ocupa toda la fila de abajo */
     }
+
+    /* En la vista de Caja, apila los productos cargados verticalmente */
+    /* La regla para #cajaProductosParaLlevar se ha movido para un enfoque mobile-first */
 
     /* Para que los botones y buscadores en el header móvil sean uniformes */
     .header-actions .action-btn,
@@ -652,6 +668,25 @@ header {
     background-color: var(--bg-hover);
 }
 
+/* NUEVO: Estilos para los headers de acordeón en Caja */
+#header-disponibles {
+    background-color: var(--btn-blue);
+    color: white;
+}
+#header-disponibles:hover {
+    background-color: var(--btn-blue); /* Mantiene el color al pasar el mouse */
+    opacity: 0.9;
+}
+
+#header-cargados {
+    background-color: var(--btn-green);
+    color: white;
+}
+#header-cargados:hover {
+    background-color: var(--btn-green); /* Mantiene el color al pasar el mouse */
+    opacity: 0.9;
+}
+
 .accordion-header .accordion-icon {
     font-size: 1rem;
     transition: transform 0.2s ease;
@@ -660,9 +695,18 @@ header {
 .accordion-content {
     padding: 15px;
     border-top: 1px solid var(--border-color);
-    display: none; /* Oculto por defecto */
+    /* display: none; -> Reemplazado por max-height para la animación */
+    max-height: 0;
+    overflow: hidden;
+    padding-top: 0;
+    padding-bottom: 0;
+    transition: max-height 0.4s ease-in-out, padding-top 0.4s ease-in-out, padding-bottom 0.4s ease-in-out;
 }
 
+.accordion-content.active {
+    padding-top: 15px;
+    padding-bottom: 0; /* El margen inferior del contenedor de totales controlará el espacio */
+}
 /* Scroll para la lista de productos disponibles */
 #cajaProductosDisponibles { /* Ahora contendrá cajas de categoría */
     max-height: 55vh;
@@ -680,17 +724,37 @@ header {
 /* Tarjeta de producto individual en la lista de caja */
 .product-card-caja-list {
     display: flex;
-    align-items: center;
-    gap: 15px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
     background-color: var(--bg-card);
     padding: 12px;
     border-radius: 8px;
     border: 1px solid var(--border-color);
 }
 
+/* Contenedor para la lista de productos cargados, ahora con scroll */
+#cajaProductosParaLlevar {
+    display: grid;
+    grid-template-columns: 1fr; /* Por defecto 1 columna (móvil) */
+    gap: 10px;
+    max-height: 45vh; /* Altura máxima antes de que aparezca el scroll */
+    overflow-y: auto;
+    padding: 10px;
+}
+
+/* Para vista de escritorio, usar 3 columnas */
+@media (min-width: 1025px) {
+    #cajaProductosParaLlevar {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
 .caja-list-info {
-    flex: 1;
-    min-width: 0; /* Para que el flex-item se encoja correctamente */
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    align-items: center;
 }
 
 .caja-list-nombre {
@@ -698,7 +762,7 @@ header {
     font-weight: 600;
     color: var(--text-primary);
     font-size: 0.95rem;
-    margin-bottom: 2px;
+    grid-column: 1 / -1; /* Ocupa toda la primera fila */
     white-space: normal; /* Permite que el texto pase a la siguiente línea */
     word-break: break-word; /* Rompe palabras largas si es necesario */
     line-height: 1.3; /* Mejora la legibilidad del texto en varias líneas */
@@ -708,6 +772,11 @@ header {
     font-size: 0.8rem;
     color: var(--text-muted);
     font-family: monospace;
+    background-color: var(--bg-input);
+    padding: 8px 10px;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 0.85rem;
 }
 .caja-list-codigo strong {
     color: var(--btn-green);
@@ -739,7 +808,17 @@ header {
 .caja-list-actions {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Estilo para el botón 'Quitar' en la lista de productos cargados */
+.btn-del-small {
+    padding: 0 12px;
+    height: 32px;
+    font-size: 0.8rem;
 }
 
 /* ==========================================================================
@@ -783,8 +862,9 @@ header {
 .caja-totals-container {
     background-color: var(--bg-card2);
     border-top: 2px solid var(--border-color);
-    padding: 12px 15px;
+    padding: 15px;
     margin-top: 10px;
+    margin-bottom: 30px; /* Asegura un espacio consistente debajo de los totales */
     display: flex;
     flex-wrap: wrap;
     gap: 20px;
@@ -797,9 +877,9 @@ header {
 .product-card-caja-vertical {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     background-color: var(--bg-card);
-    padding: 15px;
+    padding: 12px;
     border-radius: 8px;
     border: 1px solid var(--border-color);
 }
@@ -807,22 +887,22 @@ header {
 .caja-v-item {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
 }
 
 .caja-v-item label {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     color: var(--text-muted);
     text-transform: uppercase;
     font-weight: 600;
 }
 
 .caja-v-item span {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 600;
     color: var(--text-primary);
     background-color: var(--bg-input);
-    padding: 6px 10px;
+    padding: 5px 8px;
     border-radius: 4px;
     border: 1px solid var(--border-color);
     width: 100%;
@@ -832,50 +912,63 @@ header {
 .caja-v-actions {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-top: 8px;
-    padding-top: 12px;
+    gap: 8px;
+    margin-top: 6px;
+    padding-top: 8px;
     border-top: 1px solid var(--border-color);
 }
 
 .caja-v-actions > label {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: var(--text-muted);
     text-transform: uppercase;
     font-weight: 600;
     text-align: center;
 }
 
-.quantity-control {
+.caja-v-action-group {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 10px;
 }
 
+.quantity-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .quantity-btn {
     background-color: var(--btn-blue);
     color: white;
     border: none;
-    width: 40px;
-    height: 40px;
-    font-size: 1.6rem;
+    width: 32px;
+    height: 32px;
+    font-size: 1.4rem;
     font-weight: bold;
-    border-radius: 8px;
+    border-radius: 6px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     line-height: 1;
-    padding-bottom: 4px; /* Ajuste para centrar visualmente el símbolo */
+    padding-bottom: 3px;
 }
 
 .quantity-control .caja-input-cant {
-    width: 75px;
-    height: 40px;
+    width: 60px;
+    height: 32px;
     text-align: center;
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: bold;
+}
+
+/* NUEVO: Estilo más compacto para el botón 'Agregar' dentro de la tarjeta */
+.caja-v-actions .action-btn {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    height: 32px; /* Coincide con la altura del input de cantidad */
 }
 
 /* ==========================================================================
@@ -1016,6 +1109,12 @@ header {
     gap: 12px;
 }
 
+.devolucion-item-card {
+    display: flex; /* Lo convierte en un contenedor flex */
+    align-items: center; /* Alinea los elementos verticalmente */
+    gap: 15px; /* Espacio entre el checkbox, la información y las acciones */
+}
+
 .devolucion-item-card.disabled {
     opacity: 0.6;
     background-color: var(--bg-input);
@@ -1026,6 +1125,7 @@ header {
     flex-wrap: wrap;
     align-items: center;
     gap: 15px;
+    flex-grow: 1; /* Permite que la información ocupe el espacio disponible */
 }
 .item-info strong { font-size: 1rem; color: var(--text-primary); }
 .item-info span { font-size: 0.8rem; color: var(--text-muted); background: var(--bg-input); padding: 3px 6px; border-radius: 4px; }
@@ -1035,6 +1135,7 @@ header {
     align-items: flex-end;
     gap: 10px;
 }
+.item-actions { flex-grow: 1; justify-content: flex-end; } /* Empuja las acciones a la derecha */
 .item-actions .field-group { margin-bottom: 0; }
 .item-actions .action-btn { height: 38px; white-space: nowrap; }
 
@@ -1042,6 +1143,30 @@ header {
     font-style: italic;
     color: var(--btn-green);
     font-weight: 600;
+}
+
+/* NUEVO: Contenedor para los botones de acción de devolución */
+.devolucion-actions-summary {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* NUEVO: Estilos para el checkbox de selección de item */
+.item-selection {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-right: 10px;
+}
+
+.item-selection input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
 }
 
 #historialDevolucionesContent { display: flex; flex-direction: column; gap: 8px; }
@@ -1090,11 +1215,23 @@ header {
     text-align: left;
     font-size: 0.85rem;
     border-bottom: 1px solid var(--border-color);
+    vertical-align: middle; /* Mejora la alineación vertical */
+}
+
+/* Dar más espacio a las columnas de Tipo de Pago y Productos */
+.tabla-ventas-container td:nth-child(6),
+.tabla-ventas-container td:nth-child(7) {
+    min-width: 220px; /* Ajustado */
+}
+
+.tabla-ventas-container td:nth-child(7) { /* Columna de Productos */
+    min-width: 160px; /* Puede ser más pequeña ahora */
 }
 
 .tabla-ventas-container th:last-child,
 .tabla-ventas-container td:last-child {
     text-align: center;
+    width: 280px; /* Ancho fijo para la columna de acciones */
 }
 
 .tabla-ventas-container th {
@@ -1117,7 +1254,17 @@ header {
     border-radius: 4px;
     font-size: 0.75rem;
     display: inline-block;
-    margin: 2px 0;
+    margin: 2px; /* Espacio alrededor de cada badge */
+}
+
+/* Contenedor de botones de acción en la tabla de ventas */
+.venta-acciones {
+    /* Se elimina display:flex para que `vertical-align: middle` de la celda funcione. */
+    /* El centrado horizontal es manejado por `text-align: center` en la celda. */
+}
+
+.venta-acciones .venta-accion-btn + .venta-accion-btn {
+    margin-left: 6px; /* Reemplaza el `gap` que se eliminó con flexbox */
 }
 
 /* ==========================================================================
@@ -1318,6 +1465,56 @@ footer {
     background-color: var(--btn-blue);
     color: white;
 }
+
+/* --- INICIO: Estilos para Métodos de Pago Múltiples --- */
+.payment-methods-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background-color: var(--bg-input);
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.payment-method-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.payment-method-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.payment-method-selector input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.payment-method-selector label {
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    flex: 1;
+    margin-bottom: 0; /* Anular margen de label global */
+}
+
+.payment-method-input {
+    display: flex;
+    gap: 8px;
+    padding-left: 26px; /* Alinear con el texto de la label */
+}
+
+.payment-method-input .btn-fill-remaining {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+}
+/* --- FIN: Estilos para Métodos de Pago Múltiples --- */
 
 /* ==========================================================================
    10. NOTIFICACIONES Y TOASTS

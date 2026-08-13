@@ -1,19 +1,4 @@
-import { showToast } from '../utils.js';
-
-// --- FUNCIONES DE FORMATO DE NÚMEROS ---
-/**
- * Formatea un número como moneda con separador de miles (punto) y dos decimales (coma).
- * Ej: 1234.56 -> 1.234,56
- */
-function formatCurrency(number) {
-    return new Intl.NumberFormat('es-VE', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }).format(number);
-}
-function formatInteger(number) {
-    return new Intl.NumberFormat('es-VE').format(number);
-}
+import { showToast, formatCurrency, formatInteger } from '../utils.js';
 
 /**
  * Fetches an image from a URL and converts it to a Base64 data URL.
@@ -97,21 +82,32 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     doc.querySelector('#vendedor')?.setAttribute('value', currentUser);
     doc.querySelector('#garantia')?.setAttribute('value', '');
 
-    // Asignar tipo de pago manteniendo la estructura exacta de la etiqueta y valor
-    const tipoPagoInput = doc.querySelector('#tipoPago');
-    if (tipoPagoInput) {
-        tipoPagoInput.setAttribute('value', venta.tipo_pago || '');
-    } else {
-        const tipoPagoContainer = doc.querySelector('#tipoPagoContainer');
-        if (tipoPagoContainer) {
-            tipoPagoContainer.innerHTML = `<label>TIPO DE PAGO :</label><input type="text" id="tipoPago" value="${venta.tipo_pago || ''}">`;
+    // --- LLENAR LA SECCIÓN DE MÉTODOS DE PAGO ---
+    const tipoPagoContainer = doc.querySelector('#tipoPagoContainer');
+    let paymentMethodsHtml = '';
+    try {
+        const pagos = JSON.parse(venta.tipo_pago);
+        if (Array.isArray(pagos) && pagos.length > 0) {
+            paymentMethodsHtml = pagos.map(p => `<span class="payment-method-badge">Tipo de pago: ${p.metodo}</span>`).join('');
+            paymentMethodsHtml = `<div style="display: flex; flex-wrap: wrap; gap: 5px;">${paymentMethodsHtml}</div>`;
+        } else {
+            paymentMethodsHtml = `<span class="payment-method-badge">Tipo de pago: ${venta.tipo_pago || 'N/A'}</span>`;
         }
+    } catch (e) {
+        paymentMethodsHtml = `<span class="payment-method-badge">Tipo de pago: ${venta.tipo_pago || 'N/A'}</span>`;
+    }
+    if (tipoPagoContainer) {
+        tipoPagoContainer.innerHTML = `<label>MÉTODOS DE PAGO:</label>${paymentMethodsHtml}`;
     }
 
     // --- LLENAR LA TABLA DE PRODUCTOS ---
     const tableBody = doc.querySelector('#tableBody');
     if (!tableBody) throw new Error('El elemento #tableBody no fue encontrado en la plantilla de la factura.');
-    tableBody.innerHTML = '';
+    // Asegurarse de que el tbody esté completamente vacío antes de añadir filas.
+    // La lógica de abajo añade una fila por cada producto en venta.detalles.
+    // Si aparecen filas extra, revisar la plantilla 'factura.html' por <tr> estáticos fuera del #tableBody
+    // o el CSS por estilos que creen la ilusión de filas vacías.
+    tableBody.innerHTML = ''; 
 
     const style = doc.createElement('style');
     style.textContent = `
@@ -140,6 +136,16 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
         #tableBody td .text-left {
             text-align: left;
         }
+        .payment-method-badge {
+            display: inline-block;
+            background-color: #e0e0e0; /* Light grey background */
+            color: #333; /* Dark text */
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75em; /* Smaller font size */
+            white-space: nowrap; /* Prevent breaking */
+            margin: 2px; /* Small margin between badges */
+        }
         /* HACK: Cubierta para tapar el pie de página del navegador (URL, fecha, etc.) */
         @media print {
             .print-footer-cover {
@@ -151,6 +157,12 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
                 background-color: white !important;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
+            }
+            .payment-method-badge {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                background-color: #e0e0e0 !important;
+                color: #333 !important;
             }
         }
     `;
@@ -269,8 +281,9 @@ export async function generarInventarioPDF(productosCache = []) {
     footerCover.className = 'print-footer-cover';
     doc.body.appendChild(footerCover);
 
-    const tableBody = doc.querySelector('#tableBody');
-    tableBody.innerHTML = '';
+    const table = doc.querySelector('#itemsTable');
+    const templateTbody = table.querySelector('tbody');
+    if (templateTbody) templateTbody.remove();
 
     const grouped = {};
     productosCache.forEach(p => {
@@ -282,10 +295,13 @@ export async function generarInventarioPDF(productosCache = []) {
     const sortedCategories = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
 
     for (const categoria of sortedCategories) {
+        const categoryTbody = doc.createElement('tbody');
+        categoryTbody.className = 'category-group-tbody';
+
         const catRow = doc.createElement('tr');
         catRow.className = 'category-header-row';
         catRow.innerHTML = `<td colspan="4">${categoria}</td>`;
-        tableBody.appendChild(catRow);
+        categoryTbody.appendChild(catRow);
 
         const prods = grouped[categoria].sort((a, b) => a.nombre.localeCompare(b.nombre));
         prods.forEach(item => {
@@ -296,8 +312,9 @@ export async function generarInventarioPDF(productosCache = []) {
                 <td><div>${formatInteger(item.cantidad)}</div></td>
                 <td class="checkbox-cell"></td>
             `;
-            tableBody.appendChild(row);
+            categoryTbody.appendChild(row);
         });
+        table.appendChild(categoryTbody);
     }
 
     const finalHtml = doc.documentElement.outerHTML;

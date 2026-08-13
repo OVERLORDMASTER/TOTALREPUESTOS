@@ -1,0 +1,28 @@
+<div class="content-area">
+    <header>
+        <h2 class="header-title">Gestión de Devoluciones</h2>
+        <div class="header-actions">
+            <input type="text" id="devolucionVentaSearch" placeholder="Buscar Venta por ID">
+            <button class="action-btn btn-blue" id="btnBuscarVenta">Buscar Venta</button>
+        </div>
+    </header>
+
+    <div class="content-main">
+        <div id="devolucionResultContainer" class="devolucion-result-container">
+            <!-- Resultados de la búsqueda de venta y botones de acción se cargarán aquí -->
+            <p style="text-align: center; padding: 20px; color: var(--text-muted);">Busca una venta por su ID para gestionar devoluciones.</p>
+        </div>
+
+        <h3 style="margin-top: 30px; margin-bottom: 15px; color: var(--text-primary);">Historial de Devoluciones</h3>
+        <div id="historialDevolucionesContent">
+            <!-- Historial de devoluciones se cargará aquí -->
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Estilos específicos para la vista de devoluciones si son necesarios */
+    .devolucion-result-container {
+        margin-top: 20px;
+    }
+</style>

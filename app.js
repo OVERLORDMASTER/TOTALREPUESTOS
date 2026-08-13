@@ -1,34 +1,5 @@
 import { generarFacturaPDF, generarInventarioPDF } from './source/generatepdf.js';
-import { showToast, showConfirmation } from './utils.js';
-
-// --- VALIDACIÓN DE SESIÓN Y ELEMENTOS GLOBALES ---
-const usuarioGuardado = localStorage.getItem('usuario');
-if (!usuarioGuardado) {
-    window.location.href = 'index.html';
-} else {
-    document.getElementById('usernameDisplay').textContent = usuarioGuardado;
-}
-
-document.getElementById('logoutBtn').addEventListener('click', () => {
-    localStorage.removeItem('usuario');
-    window.location.href = 'index.html';
-});
-
-// --- FUNCIONES DE FORMATO DE NÚMEROS ---
-/**
- * Formatea un número como moneda con separador de miles (punto) y dos decimales (coma).
- * Ej: 1234.56 -> 1.234,56
- */
-function formatCurrency(number) {
-    return new Intl.NumberFormat('es-VE', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }).format(number);
-}
-
-function formatInteger(number) {
-    return new Intl.NumberFormat('es-VE').format(number);
-}
+import { showToast, showConfirmation, formatCurrency, formatInteger } from './utils.js';
 
 // --- INICIO: Lógica para autocompletar datos del cliente ---
 const inputCedula = document.getElementById('cliCedula');
@@ -259,6 +230,7 @@ let productosCache = [];
 let productosParaLlevar = [];
 let ventasCache = [];
 let oficialRate = 0, paraleloRate = 0;
+let totalVentaActual = 0; // Para almacenar el total de la venta actual en el modal
 let reportCharts = {}; // Para almacenar instancias de los gráficos de reportes
 
 const TASA_SETTINGS_KEY = 'tasaSettings';
@@ -267,6 +239,8 @@ let tasaSettings = {
     oficial: { mode: 'automatico', value: 0 },
     paralelo: { mode: 'automatico', value: 0 }
 };
+
+const METODOS_DE_PAGO = ['Pago Móvil', 'Binance', 'Dólares en efectivo', 'Bolívares en efectivo', 'Zelle'];
 
 // --- TASAS DE CAMBIO ---
 async function obtenerTasas() {
@@ -370,7 +344,6 @@ function renderProducts(productsToRender) {
         prods.forEach(p => {
             const precioVentaBsBcv = formatCurrency(p.precio_venta_dolares_bcv * oficialRate);
             const precioCostoBsBcv = formatCurrency(p.precio_costo_dolares_bcv * oficialRate);
-            const precioBsUsdt = formatCurrency(p.precio_usdt * paraleloRate);
             const card = document.createElement('div');
             card.className = 'product-card';
             card.dataset.codigo = p.codigo;
@@ -380,12 +353,12 @@ function renderProducts(productsToRender) {
                 <div class="field-group"><label>marca</label><div class="product-card-value">${p.marca || ''}</div></div>
                 <div class="field-group"><label>ubicación</label><div class="product-card-value">${p.ubicacion || ''}</div></div>
                 <div class="field-group"><label>cantidad</label><div class="product-card-value">${formatInteger(p.cantidad)}</div></div>
-                <div class="field-group"><label>precio venta $ bcv</label><div class="product-card-value">${formatCurrency(p.precio_venta_dolares_bcv)}</div></div>
-                <div class="field-group"><label>precio venta bs (bcv)</label><div class="product-card-value">${precioVentaBsBcv}</div></div>
-                <div class="field-group"><label>precio costo $ bcv</label><div class="product-card-value">${formatCurrency(p.precio_costo_dolares_bcv)}</div></div>
-                <div class="field-group"><label>precio costo bs (bcv)</label><div class="product-card-value">${precioCostoBsBcv}</div></div>
-                <div class="field-group"><label>precio $ usdt</label><div class="product-card-value">${formatCurrency(p.precio_usdt)}</div></div>
-                <div class="field-group"><label>precio bs (usdt)</label><div class="product-card-value">${precioBsUsdt}</div></div>`;
+                                <div class="field-group"><label>precio $ en efectivo</label><div class="product-card-value" style="color: var(--btn-green); font-weight: bold;">${formatCurrency(p.precio_usdt)}</div></div>
+                <div class="field-group"><label>precio venta $ bcv</label><div class="product-card-value" style="color: var(--btn-green); font-weight: bold;">${formatCurrency(p.precio_venta_dolares_bcv)}</div></div>
+                <div class="field-group"><label>precio venta bs (bcv)</label><div class="product-card-value" style="color: var(--btn-edit-text); font-weight: bold;">${precioVentaBsBcv}</div></div>
+                <div class="field-group"><label>precio costo $ bcv</label><div class="product-card-value" style="color: var(--btn-green); font-weight: bold;">${formatCurrency(p.precio_costo_dolares_bcv)}</div></div>
+                <div class="field-group"><label>precio costo bs (bcv)</label><div class="product-card-value" style="color: var(--btn-edit-text); font-weight: bold;">${precioCostoBsBcv}</div></div>`;
+
             card.addEventListener('click', () => {
                 if (modoEdicion) return;
                 document.querySelectorAll('.product-card').forEach(c => c.classList.remove('selected'));
@@ -419,17 +392,29 @@ async function handleEditarProducto() {
     // Abrir el modal y prepararlo para la edición
     const modal = document.getElementById('modalProducto');
     modal.querySelector('h3').textContent = 'Editar Producto';
-
+    document.getElementById('prodCodigo').readOnly = false; // Permitir la edición del código al editar
     // Poblar campos comunes y marcar que estamos editando
     document.getElementById('prodEditCodigo').value = productoSeleccionado.codigo;
     document.getElementById('prodCodigo').value = productoSeleccionado.codigo;
     document.getElementById('prodCategoria').value = productoSeleccionado.categoria;
     document.getElementById('prodNombre').value = productoSeleccionado.nombre;
-    document.getElementById('prodCantidad').value = productoSeleccionado.cantidad;
+
+    // --- INICIO: Lógica de cantidad para EDICIÓN ---
+    const cantidadContainer = document.getElementById('prodCantidadContainer');
+    cantidadContainer.style.gridTemplateColumns = '1fr 1fr'; // Mostrar dos columnas
+
+    document.getElementById('cantidadActualGroup').style.display = 'block';
+    document.getElementById('prodCantidadActual').value = productoSeleccionado.cantidad;
+
+    document.getElementById('cantidadIngresarGroup').style.display = 'block';
+    document.getElementById('labelCantidadIngresar').textContent = 'Cantidad que Ingresa';
+    document.getElementById('prodCantidad').value = 0; // Iniciar en 0 para sumar
+    // --- FIN: Lógica de cantidad para EDICIÓN ---
+
     document.getElementById('prodUbicacion').value = productoSeleccionado.ubicacion || '';
     document.getElementById('prodMarca').value = productoSeleccionado.marca || '';
 
-    // Determinar el modo (manual o calculadora) y mostrar los campos correctos
+    // Poblar el resto de los campos
     const modo = productoSeleccionado.modo_creacion || 'manual';
 
     setProductModalMode(modo); // Cambia la UI directamente
@@ -472,19 +457,50 @@ async function initVistaCaja() {
     renderCajaProductos(productosCache);
     renderizarParaLlevar(); // Renderiza el carrito una vez al cargar la vista
 
-    // Lógica para los nuevos acordeones
+    // --- INICIO: Nueva lógica de acordeón dinámico con animación ---
     const accordions = document.querySelectorAll('.accordion-header');
-    accordions.forEach(accordion => {
-        const content = accordion.nextElementSibling;
-        content.style.display = 'none'; // Cerrado por defecto
-        accordion.querySelector('.accordion-icon').textContent = '▼';
 
-        accordion.addEventListener('click', () => {
-            const isVisible = content.style.display === 'block';
-            content.style.display = isVisible ? 'none' : 'block';
-            accordion.querySelector('.accordion-icon').textContent = isVisible ? '▼' : '▲';
+    // Asignar IDs para estilos específicos
+    if (accordions.length > 0) accordions[0].id = 'header-disponibles';
+    if (accordions.length > 1) accordions[1].id = 'header-cargados';
+    
+    // Abrir el primer acordeón ('Productos Disponibles') por defecto.
+    accordions.forEach((acc, index) => {
+        const content = acc.nextElementSibling;
+        const icon = acc.querySelector('.accordion-icon');
+        if (index === 0) {
+            content.classList.add('active');
+            content.style.maxHeight = content.scrollHeight + 'px';
+            icon.textContent = '▲';
+        } else {
+            content.classList.remove('active');
+            content.style.maxHeight = null;
+            icon.textContent = '▼';
+        }
+    });
+
+    accordions.forEach(clickedAccordion => {
+        clickedAccordion.addEventListener('click', () => {
+            const content = clickedAccordion.nextElementSibling;
+            
+            // Si ya está activo, no hacer nada.
+            if (content.classList.contains('active')) return;
+
+            // Cerrar todos los demás acordeones
+            accordions.forEach(acc => {
+                const otherContent = acc.nextElementSibling;
+                otherContent.classList.remove('active');
+                otherContent.style.maxHeight = null;
+                acc.querySelector('.accordion-icon').textContent = '▼';
+            });
+
+            // Abrir el que se clickeó
+            content.classList.add('active');
+            content.style.maxHeight = content.scrollHeight + 'px';
+            clickedAccordion.querySelector('.accordion-icon').textContent = '▲';
         });
     });
+    // --- FIN: Nueva lógica de acordeón dinámico con animación ---
 
     document.getElementById('cajaProductSearch').addEventListener('input', (e) => {
         const term = e.target.value.toLowerCase().trim();
@@ -497,10 +513,8 @@ async function initVistaCaja() {
 }
 
 async function initCajaData() {
-    if (productosCache.length === 0) {
-        const { data } = await _supabase.from('productos').select('*').order('nombre');
-        productosCache = data || [];
-    }
+    const { data } = await _supabase.from('productos').select('*').order('nombre');
+    productosCache = data || [];
     if (oficialRate === 0) await obtenerTasas();
 }
 
@@ -533,7 +547,8 @@ function renderCajaProductos(productsToRender) {
         productsGrid.className = 'caja-products-grid'; // Nueva clase para la cuadrícula de productos dentro de una categoría en caja
 
         prods.forEach(p => {
-            const precioVentaBsBcv = (p.precio_venta_dolares_bcv * oficialRate).toFixed(2);
+            const precioVentaBsBcv = formatCurrency(p.precio_venta_dolares_bcv * oficialRate);
+            const precioVentaDolares = formatCurrency(p.precio_venta_dolares_bcv);
             const card = document.createElement('div');
             card.className = 'product-card-caja-vertical'; // Clase existente para la tarjeta vertical
             card.innerHTML = `
@@ -546,8 +561,12 @@ function renderCajaProductos(productsToRender) {
                     <span>${p.nombre}</span>
                 </div>
                 <div class="caja-v-item">
-                    <label>Precio Bs</label>
-                    <span>${precioVentaBsBcv}</span>
+                    <label>Precio Bs (BCV)</label>
+                    <span style="color: var(--btn-edit-text); font-weight: bold;">${precioVentaBsBcv}</span>
+                </div>
+                <div class="caja-v-item">
+                    <label>Precio Dólares (BCV)</label>
+                    <span style="color: var(--btn-green); font-weight: bold;">${precioVentaDolares}</span>
                 </div>
                 <div class="caja-v-item">
                     <label>Stock Disponible</label>
@@ -555,12 +574,14 @@ function renderCajaProductos(productsToRender) {
                 </div>
                 <div class="caja-v-actions">
                     <label>Cantidad a llevar</label>
-                    <div class="quantity-control">
-                        <button type="button" class="quantity-btn minus" data-codigo="${p.codigo}">-</button>
-                        <input type="number" class="caja-input-cant" id="cant_${p.codigo}" value="1" min="1" max="${p.cantidad}">
-                        <button type="button" class="quantity-btn plus" data-codigo="${p.codigo}">+</button>
+                    <div class="caja-v-action-group">
+                        <div class="quantity-control">
+                            <button type="button" class="quantity-btn minus" data-codigo="${p.codigo}">-</button>
+                            <input type="number" class="caja-input-cant" id="cant_${p.codigo}" value="1" min="1" max="${p.cantidad}">
+                            <button type="button" class="quantity-btn plus" data-codigo="${p.codigo}">+</button>
+                        </div>
+                        <button class="action-btn btn-add" data-codigo="${p.codigo}">Agregar</button>
                     </div>
-                    <button class="action-btn btn-add" data-codigo="${p.codigo}">Agregar</button>
                 </div>
             `;
             productsGrid.appendChild(card);
@@ -609,8 +630,9 @@ function renderizarParaLlevar() {
 
     let totalArticulos = 0, totalBcv = 0;
     productosParaLlevar.forEach(item => {
-        const subtotalUSD = item.precio_usdt * item.cantidadLlevar; // Usar precio_usdt para el cálculo del total en USD
-        const subtotalBS = formatCurrency(subtotalUSD * oficialRate);
+        // CORRECCIÓN: Usar precio_venta_dolares_bcv en lugar de precio_usdt
+        const subtotalUSD = item.precio_venta_dolares_bcv * item.cantidadLlevar;
+        const subtotalBS = formatCurrency(subtotalUSD * oficialRate); // Usar tasa oficial para consistencia visual
 
         totalArticulos += item.cantidadLlevar;
         totalBcv += subtotalUSD;
@@ -619,16 +641,28 @@ function renderizarParaLlevar() {
         card.innerHTML = `
             <div class="caja-list-info">
                 <span class="caja-list-nombre">${item.nombre}</span>
-                <span class="caja-list-codigo">Subtotal Bs: <strong>${subtotalBS}</strong></span>
+                <div class="caja-v-item">
+                    <label>Subtotal Bs</label>
+                    <span style="color: var(--btn-edit-text); font-weight: bold;">${subtotalBS}</span>
+                </div>
+                <div class="caja-v-item">
+                    <label>Subtotal $</label>
+                    <span style="color: var(--btn-green); font-weight: bold;">${formatCurrency(subtotalUSD)}</span>
+                </div>
             </div>
             <div class="caja-list-actions">
-                <input type="number" class="caja-input-cant" value="${item.cantidadLlevar}" data-codigo-llevar="${item.codigo}" min="1" ${!item.esAdicional ? `max="${item.cantidad}"` : ''}>
+                <div class="quantity-control">
+                    <button type="button" class="quantity-btn minus" data-codigo-llevar-control="${item.codigo}">-</button>
+                    <input type="number" class="caja-input-cant" value="${item.cantidadLlevar}" data-codigo-llevar="${item.codigo}" min="1" ${!item.esAdicional ? `max="${item.cantidad}"` : ''}>
+                    <button type="button" class="quantity-btn plus" data-codigo-llevar-control="${item.codigo}">+</button>
+                </div>
                 <button class="action-btn btn-del btn-del-small" data-codigo-quitar="${item.codigo}">Quitar</button>
             </div>`;
         container.appendChild(card);
     });
 
-    const totalBcvBs = totalBcv * paraleloRate; // Usar paraleloRate para el total en Bs
+    // CORRECCIÓN: Se usa la tasa oficial (BCV) para que coincida con la etiqueta "Total Bolívares (BCV)" y los subtotales.
+    const totalBcvBs = totalBcv * oficialRate;
 
     if (totalArticulosEl) totalArticulosEl.textContent = formatInteger(totalArticulos);
     if (totalBcvEl) totalBcvEl.textContent = `$ ${formatCurrency(totalBcv)}`;
@@ -669,13 +703,13 @@ function initVistaVentas() {
             const matchNombre = v.cliente_nombre.toLowerCase().includes(term);
             const matchId = v.id.toString().includes(term);
             const matchFecha = new Date(v.fecha).toLocaleString().toLowerCase().includes(term);
-            const matchDetalle = v.detalles.some(d => d.producto_nombre.toLowerCase().includes(term) || d.producto_codigo.toLowerCase().includes(term));
-            return matchNombre || matchId || matchFecha || matchDetalle;
+        const matchDetalle = v.detalles?.some(d => d.producto_nombre.toLowerCase().includes(term) || d.producto_codigo.toLowerCase().includes(term));
+        const matchPago = typeof v.tipo_pago === 'string' && v.tipo_pago.toLowerCase().includes(term);
+        return matchNombre || matchId || matchFecha || matchDetalle || matchPago;
         });
         renderizarTablaVentas(filtradas);
     });
 }
-
 async function cargarHistorialVentas() {
     const container = document.getElementById('ventasAccordionContainer');
     if (!container) return;
@@ -828,24 +862,56 @@ function renderizarTablaVentas(listaVentas) {
                         detallesAgrupados[key] = { ...d, cantidad: parseInt(d.cantidad, 10) || 0 };
                     }
                 });
-                const productosHtml = Object.values(detallesAgrupados).map(d => `<span class="detalle-venta-badge">${d.producto_nombre} (x${d.cantidad})</span>`).join('<br>');
+                
+                const totalProductosUnicos = Object.keys(detallesAgrupados).length;
+                let productosHtml;
+
+                if (totalProductosUnicos > 0) {
+                    productosHtml = `
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;">
+                            <span style="font-weight: 500;">${totalProductosUnicos} producto(s)</span>
+                            <button class="action-btn btn-blue btn-ver-detalles-venta venta-accion-btn" data-venta-id="${v.id}">Ver Detalles</button>
+                        </div>
+                    `;
+                } else {
+                    productosHtml = '<span class="detalle-venta-badge">Sin productos</span>';
+                }
+
+                let tipoPagoHtml = '';
+                try {
+                    const pagos = JSON.parse(v.tipo_pago);
+                    if (Array.isArray(pagos) && pagos.length > 0) {
+                        // Crear una lista vertical de métodos de pago sin montos
+                        const pagosHtml = pagos.map(p => `<span class="detalle-venta-badge">Tipo de pago: ${p.metodo}</span>`).join('');
+                        tipoPagoHtml = `<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">${pagosHtml}</div>`;
+                    } else { throw new Error("No es un array"); }
+                } catch (e) {
+                    tipoPagoHtml = `<span class="detalle-venta-badge">Tipo de pago: ${v.tipo_pago || 'N/A'}</span>`;
+                }
+
+                let statusBadge = '';
+                if (v.estado_pago === 'pendiente') {
+                    statusBadge = `<br><span class="detalle-venta-badge" style="background-color: var(--btn-orange); color: white; font-weight: bold;">DEBE</span>`;
+                }
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td style="font-weight: bold; color: var(--btn-yellow);">#${v.id}</td>
                     <td>${horaFormateada}</td>
-                    <td>${v.cliente_nombre}</td>
+                    <td>${v.cliente_nombre}${statusBadge}</td>
                     <td>${v.cliente_cedula}</td>
                     <td>${v.cliente_telefono}</td>
-                    <td><span style="color: var(--btn-green); font-weight: 600;">${v.tipo_pago}</span></td>
+                    <td>${tipoPagoHtml}</td>
                     <td>${productosHtml}</td>
                     <td style="font-weight: bold;">$ ${formatCurrency(parseFloat(v.total_usd))}</td>
-                    <td style="font-weight: bold;">Bs ${formatCurrency(parseFloat(v.total_bs))}</td>
-                    <td class="venta-acciones">
-                        <button class="btn-pdf" data-venta-id="${v.id}">PDF</button>
-                        <button class="btn-edit-venta" data-venta-id="${v.id}">Editar</button>
-                        <button class="action-btn btn-del btn-delete-venta" data-venta-id="${v.id}">Eliminar</button>
-                    </td>`;
+                    <td style="font-weight: bold;">Bs ${formatCurrency(parseFloat(v.total_bs))}</td>`;
+                
+                let accionesHtml = `<button class="btn-pdf venta-accion-btn" data-venta-id="${v.id}">PDF</button>`;
+                if (v.estado_pago === 'pendiente') {
+                    accionesHtml += `<button class="action-btn btn-blue btn-abonar-venta venta-accion-btn" data-venta-id="${v.id}">Abonar</button>`;
+                }
+                accionesHtml += `<button class="btn-edit-venta venta-accion-btn" data-venta-id="${v.id}">Editar</button><button class="action-btn btn-del btn-delete-venta venta-accion-btn" data-venta-id="${v.id}">Eliminar</button>`;
+                tr.innerHTML += `<td class="venta-acciones">${accionesHtml}</td>`;
                 tbody.appendChild(tr);
             });
 
@@ -924,6 +990,399 @@ async function handleDeleteSale(ventaId) {
             showToast(error.message, 'error');
         }
     });
+}
+
+function handleAbrirModalDetallesVenta(ventaId) {
+    const venta = ventasCache.find(v => v.id == ventaId);
+    if (!venta) {
+        showToast('Venta no encontrada', 'error');
+        return;
+    }
+
+    const modal = document.getElementById('modalVentaDetalles');
+    document.getElementById('detallesVentaIdDisplay').textContent = `#${venta.id}`;
+
+    const detallesContainer = document.getElementById('detallesVentaProductos');
+    
+    const detallesAgrupados = {};
+    venta.detalles.forEach(d => {
+        const key = d.producto_codigo || d.producto_nombre;
+        if (detallesAgrupados[key]) {
+            detallesAgrupados[key].cantidad += parseInt(d.cantidad, 10) || 0;
+        } else {
+            detallesAgrupados[key] = { ...d, cantidad: parseInt(d.cantidad, 10) || 0 };
+        }
+    });
+
+    if (Object.keys(detallesAgrupados).length > 0) {
+        // Usar un estilo de lista más limpio
+        detallesContainer.innerHTML = '<ul style="list-style-type: none; padding-left: 0; margin: 0;">' + 
+            Object.values(detallesAgrupados).map(d => 
+                `<li style="padding: 6px 0; border-bottom: 1px solid var(--border-color);">
+                    <strong>${d.producto_nombre}</strong> (x${d.cantidad})
+                 </li>`
+            ).join('') + 
+        '</ul>';
+        // Quitar el borde del último elemento
+        detallesContainer.querySelector('li:last-child').style.borderBottom = 'none';
+    } else {
+        detallesContainer.innerHTML = 'No hay detalles de productos para esta venta.';
+    }
+
+    modal.classList.add('active');
+}
+
+async function handleAbrirModalAbono(ventaId) {
+    const venta = ventasCache.find(v => v.id == ventaId);
+    if (!venta) {
+        showToast('Venta no encontrada en caché.', 'error');
+        return;
+    }
+
+    await obtenerTasas(); // Asegurar que las tasas estén frescas
+
+    // Calcular el monto ya pagado
+    let totalYaPagado = 0;
+    try {
+        const pagosExistentes = JSON.parse(venta.tipo_pago);
+        if (Array.isArray(pagosExistentes)) {
+            totalYaPagado = pagosExistentes.reduce((sum, p) => sum + (parseFloat(p.monto) || 0), 0);
+        }
+    } catch (e) {
+        console.warn("No se pudieron analizar los pagos existentes para la venta #" + ventaId);
+    }
+    totalYaPagado = parseFloat(totalYaPagado.toFixed(2));
+
+    const totalDeLaVenta = parseFloat(venta.total_usd);
+    const faltanteActual = totalDeLaVenta - totalYaPagado;
+
+    // Poblar el resumen del modal de abono
+    document.getElementById('abonoVentaId').value = venta.id;
+    document.getElementById('abonoVentaIdDisplay').textContent = `#${venta.id}`;
+    document.getElementById('abonoTotalVenta').textContent = `$ ${formatCurrency(totalDeLaVenta)}`;
+    document.getElementById('abonoTotalPagado').textContent = `$ ${formatCurrency(totalYaPagado)}`;
+    document.getElementById('abonoTotalVentaBs').textContent = `Bs ${formatCurrency(totalDeLaVenta * oficialRate)}`;
+    document.getElementById('abonoTotalPagadoBs').textContent = `Bs ${formatCurrency(totalYaPagado * oficialRate)}`;
+    document.getElementById('abonoFaltante').textContent = `$ ${formatCurrency(faltanteActual)}`;
+    document.getElementById('abonoFaltanteBs').textContent = `Bs ${formatCurrency(faltanteActual * oficialRate)}`;
+
+    // Generar inputs para los métodos de pago
+    const metodosEnBolivares = ['Pago Móvil', 'Bolívares en efectivo'];
+    const paymentContainer = document.getElementById('abonoPaymentMethodsContainer');
+    paymentContainer.innerHTML = METODOS_DE_PAGO.map(metodo => {
+        const id = `abono_${metodo.toLowerCase().replace(/ /g, '_').replace('ó','o')}`;
+        const isBsMethod = metodosEnBolivares.includes(metodo);
+        const currencyLabel = isBsMethod ? 'Bs' : '$';
+        const placeholderText = `Monto en ${currencyLabel}`;
+
+        return `
+            <div class="payment-method-row">
+                <div class="payment-method-selector">
+                    <input type="checkbox" id="check_${id}" data-abono-method-id="${id}">
+                    <label for="check_${id}">${metodo} (${currencyLabel})</label>
+                </div>
+                <div class="payment-method-input" id="input_container_${id}" style="display: none;">
+                    <input type="number" class="abono-payment-amount-input" step="0.01" placeholder="${placeholderText}" id="amount_${id}" data-method-name="${metodo}" data-currency="${isBsMethod ? 'BS' : 'USD'}">
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // Resetear el estado del formulario
+    const form = document.getElementById('formAbonoVenta');
+    form.reset();
+    
+    // Añadir listeners para este modal
+    const updateAbonoHandler = () => updateAbonoSummary(totalDeLaVenta, totalYaPagado);
+    form.querySelectorAll('.abono-payment-amount-input').forEach(input => {
+        input.addEventListener('input', updateAbonoHandler);
+    });
+    form.querySelectorAll('[data-abono-method-id]').forEach(check => {
+        check.addEventListener('change', (e) => {
+            const id = e.target.dataset.abonoMethodId;
+            const inputContainer = document.getElementById(`input_container_${id}`);
+            const amountInput = document.getElementById(`amount_${id}`);
+            inputContainer.style.display = e.target.checked ? 'flex' : 'none';
+            if (!e.target.checked) amountInput.value = '';
+            updateAbonoHandler();
+        });
+    });
+
+    updateAbonoSummary(totalDeLaVenta, totalYaPagado); // Llamada inicial para establecer el estado del botón
+    document.getElementById('modalAbonoVenta').classList.add('active');
+}
+
+function updateAbonoSummary(totalDeLaVenta, totalYaPagado) {
+    let nuevoAbonoUsd = Array.from(document.querySelectorAll('.abono-payment-amount-input'))
+        .reduce((sum, input) => {
+            const container = input.closest('.payment-method-input');
+            if (container && container.style.display !== 'none') {
+                const val = parseFloat(input.value) || 0;
+                if (input.dataset.currency === 'BS' && oficialRate > 0) {
+                    return sum + (val / oficialRate);
+                }
+                return sum + val;
+            }
+            return sum;
+        }, 0);
+    
+    nuevoAbonoUsd = parseFloat(nuevoAbonoUsd.toFixed(2));
+    const faltanteFinal = totalDeLaVenta - totalYaPagado - nuevoAbonoUsd;
+
+    document.getElementById('abonoNuevoTotalBs').textContent = `Bs ${formatCurrency(nuevoAbonoUsd * oficialRate)}`;
+    document.getElementById('abonoNuevoTotal').textContent = `$ ${formatCurrency(nuevoAbonoUsd)}`;
+    
+    const btnConfirmar = document.getElementById('btnConfirmarAbono');
+
+    if (faltanteFinal < -0.01) { // Se pagó de más
+        btnConfirmar.disabled = true;
+        btnConfirmar.textContent = 'Monto excede la deuda';
+    } else if (Math.abs(faltanteFinal) < 0.01) { // Se saldó la deuda
+        btnConfirmar.disabled = false;
+        btnConfirmar.textContent = 'Confirmar Pago Final';
+    } else { // Aún queda deuda
+        btnConfirmar.disabled = false;
+        btnConfirmar.textContent = 'Confirmar Abono';
+    }
+
+    if (nuevoAbonoUsd <= 0) {
+        btnConfirmar.disabled = true;
+        btnConfirmar.textContent = 'Ingrese un monto';
+    }
+}
+
+async function handleConfirmarAbono(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnConfirmarAbono');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Procesando...';
+
+    const ventaId = document.getElementById('abonoVentaId').value;
+
+    try {
+        // 1. Obtener los nuevos pagos
+        const nuevosPagos = [];
+        document.querySelectorAll('#abonoPaymentMethodsContainer input[type="checkbox"]:checked').forEach(check => {
+            const id = check.dataset.abonoMethodId;
+            const amountInput = document.getElementById(`amount_${id}`);
+            const inputCurrency = amountInput.dataset.currency;
+            let amount = parseFloat(amountInput.value) || 0;
+            let amountInUsd = amount;
+
+            if (inputCurrency === 'BS' && oficialRate > 0) {
+                amountInUsd = amount / oficialRate;
+            }
+
+            if (amountInUsd > 0) {
+                nuevosPagos.push({
+                    metodo: amountInput.dataset.methodName,
+                    monto: parseFloat(amountInUsd.toFixed(2))
+                });
+            }
+        });
+
+        if (nuevosPagos.length === 0) {
+            throw new Error('Debe registrar al menos un nuevo pago.');
+        }
+
+        // 2. Obtener los datos de la venta actual
+        const { data: ventaActual, error: fetchError } = await _supabase
+            .from('ventas')
+            .select('total_usd, tipo_pago')
+            .eq('id', ventaId)
+            .single();
+        
+        if (fetchError) throw fetchError;
+
+        // 3. Fusionar pagos
+        let pagosExistentes = [];
+        try {
+            const parsed = JSON.parse(ventaActual.tipo_pago);
+            if (Array.isArray(parsed)) {
+                pagosExistentes = parsed;
+            }
+        } catch (err) {
+            console.warn("No se pudieron analizar los pagos existentes, se comenzará de nuevo. Valor original:", ventaActual.tipo_pago);
+        }
+
+        const todosLosPagos = [...pagosExistentes, ...nuevosPagos];
+        const nuevoTotalPagado = todosLosPagos.reduce((sum, p) => sum + p.monto, 0);
+
+        // 4. Determinar el nuevo estado del pago
+        const totalDeLaVenta = parseFloat(ventaActual.total_usd);
+        const nuevoEstadoPago = (nuevoTotalPagado + 0.01) >= totalDeLaVenta ? 'pagado' : 'pendiente';
+
+        // 5. Actualizar la venta en la base de datos
+        const { error: updateError } = await _supabase
+            .from('ventas')
+            .update({
+                tipo_pago: JSON.stringify(todosLosPagos),
+                estado_pago: nuevoEstadoPago
+            })
+            .eq('id', ventaId);
+
+        if (updateError) throw updateError;
+
+        // 6. Finalizar
+        showToast('Abono registrado con éxito.', 'success');
+        document.getElementById('modalAbonoVenta').classList.remove('active');
+        cargarHistorialVentas(); // Refrescar la vista de ventas
+        socket.emit('cambio-dato', { type: 'ventas' });
+
+    } catch (error) {
+        console.error('Error al confirmar abono:', error);
+        showToast(`Error: ${error.message}`, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+}
+
+function updateEditPaymentSummary() {
+    const totalVenta = parseFloat(document.getElementById('editVentaTotalUsd').value) || 0;
+    if (totalVenta === 0) return;
+
+    let totalPagadoUsd = Array.from(document.querySelectorAll('.edit-payment-amount-input'))
+        .reduce((sum, input) => {
+            const container = input.closest('.payment-method-input');
+            if (container && container.style.display !== 'none') {
+                const val = parseFloat(input.value) || 0;
+                if (input.dataset.currency === 'BS' && oficialRate > 0) {
+                    return sum + (val / oficialRate);
+                }
+                return sum + val;
+            }
+            return sum;
+        }, 0);
+    
+    totalPagadoUsd = parseFloat(totalPagadoUsd.toFixed(2));
+    const faltante = totalVenta - totalPagadoUsd;
+
+    document.getElementById('editModalTotalPagado').textContent = `$ ${formatCurrency(totalPagadoUsd)}`;
+    document.getElementById('editModalFaltante').textContent = `$ ${formatCurrency(Math.abs(faltante))}`;
+
+    document.getElementById('editModalFaltanteBs').textContent = `Bs ${formatCurrency(Math.abs(faltante) * oficialRate)}`;
+    const faltanteLabel = document.getElementById('editFaltanteLabel');
+    const btnConfirmar = document.getElementById('btnConfirmarEdicionVenta');
+
+    faltanteLabel.style.color = 'var(--btn-red)';
+    document.getElementById('editModalFaltante').style.color = 'var(--btn-red)';
+
+    if (faltante < -0.01) { // Sobrante
+        faltanteLabel.textContent = '¡Sobrante!';
+        btnConfirmar.disabled = true;
+        btnConfirmar.textContent = 'Monto excede el total';
+    } else if (Math.abs(faltante) < 0.01) { // Completo
+        faltanteLabel.textContent = 'Completo';
+        faltanteLabel.style.color = 'var(--btn-green)';
+        document.getElementById('editModalFaltante').style.color = 'var(--btn-green)';
+        btnConfirmar.disabled = false;
+        btnConfirmar.textContent = 'Guardar Cambios';
+    } else { // Faltante
+        faltanteLabel.textContent = 'Faltante';
+        btnConfirmar.disabled = false; // Permitir guardar con deuda (pendiente)
+        btnConfirmar.textContent = 'Guardar como Pendiente';
+    }
+}
+
+async function handleAbrirModalEditarVenta(venta) {
+    if (!venta) return;
+    await obtenerTasas();
+
+    const totalDeLaVenta = parseFloat(venta.total_usd);
+
+    // 1. Poblar datos del cliente y totales
+    document.getElementById('editVentaId').value = venta.id;
+    document.getElementById('editVentaTotalUsd').value = totalDeLaVenta;
+    document.getElementById('editVentaIdDisplay').textContent = `#${venta.id}`;
+    document.getElementById('editCliNombre').value = venta.cliente_nombre;
+    if (venta.cliente_cedula && venta.cliente_cedula.includes('-')) {
+        const [tipo, ...numero] = venta.cliente_cedula.split('-');
+        document.getElementById('editCliTipoCedula').value = tipo;
+        document.getElementById('editCliCedula').value = numero.join('-');
+    } else {
+        document.getElementById('editCliTipoCedula').value = 'V';
+        document.getElementById('editCliCedula').value = venta.cliente_cedula || '';
+    }
+    document.getElementById('editCliTelefono').value = venta.cliente_telefono;
+    document.getElementById('editCliDireccion').value = venta.cliente_direccion || '';
+    document.getElementById('editModalTotalUsd').textContent = `$ ${formatCurrency(totalDeLaVenta)}`;
+    document.getElementById('editModalTotalBs').textContent = `Bs ${formatCurrency(totalDeLaVenta * oficialRate)}`;
+
+    // 2. Generar inputs de pago
+    const metodosEnBolivares = ['Pago Móvil', 'Bolívares en efectivo'];
+    const paymentContainer = document.getElementById('editPaymentMethodsContainer');
+    paymentContainer.innerHTML = METODOS_DE_PAGO.map(metodo => {
+        const id = `edit_${metodo.toLowerCase().replace(/ /g, '_').replace('ó','o')}`;
+        // Ensure 'ó' is replaced correctly for consistency
+        const isBsMethod = metodosEnBolivares.includes(metodo);
+        const currencyLabel = isBsMethod ? 'Bs' : '$';
+        return `
+            <div class="payment-method-row">
+                <div class="payment-method-selector">
+                    <input type="checkbox" id="check_${id}" data-edit-method-id="${id}">
+                    <label for="check_${id}">${metodo} (${currencyLabel})</label>
+                </div>
+                <div class="payment-method-input" id="input_container_${id}" style="display: none;">
+                    <input type="number" class="edit-payment-amount-input" step="0.01" placeholder="Monto en ${currencyLabel}" id="amount_${id}" data-method-name="${metodo}" data-currency="${isBsMethod ? 'BS' : 'USD'}">
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // 3. Poblar con los pagos existentes
+    let pagosExistentes = [];
+    try {
+        const parsed = JSON.parse(venta.tipo_pago);
+        if (Array.isArray(parsed)) pagosExistentes = parsed;
+    } catch (e) { /* no-op */ }
+
+    pagosExistentes.forEach(pago => {
+        const metodoNormalizado = pago.metodo.toLowerCase().replace(/ /g, '_').replace('ó','o');
+        const id = `edit_${metodoNormalizado}`;
+        const check = document.getElementById(`check_${id}`);
+        const amountInput = document.getElementById(`amount_${id}`);
+        
+        if (check && amountInput) {
+            check.checked = true;
+            document.getElementById(`input_container_${id}`).style.display = 'flex';
+            
+            if (amountInput.dataset.currency === 'BS') {
+                amountInput.value = (pago.monto * oficialRate).toFixed(2);
+            } else {
+                amountInput.value = pago.monto.toFixed(2);
+            }
+        }
+    });
+
+    // 4. Añadir listeners
+    const modalBody = document.getElementById('formEditarVenta');
+    const updateHandler = (e) => {
+        if (e.target.classList.contains('edit-payment-amount-input')) {
+            updateEditPaymentSummary();
+        }
+    };
+    modalBody.removeEventListener('input', modalBody.updateHandler);
+    modalBody.addEventListener('input', updateHandler);
+    modalBody.updateHandler = updateHandler;
+    
+    modalBody.querySelectorAll('[data-edit-method-id]').forEach(check => {
+        const newCheck = check.cloneNode(true);
+        check.parentNode.replaceChild(newCheck, check);
+        newCheck.addEventListener('change', (e) => {
+            const id = e.target.dataset.editMethodId;
+            const inputContainer = document.getElementById(`input_container_${id}`);
+            const amountInput = document.getElementById(`amount_${id}`);
+            inputContainer.style.display = e.target.checked ? 'flex' : 'none';
+            if (!e.target.checked) amountInput.value = '';
+            updateEditPaymentSummary();
+        });
+    });
+
+    // 5. Abrir modal y calcular resumen inicial
+    updateEditPaymentSummary();
+    document.getElementById('modalEditarVenta').classList.add('active');
 }
 
 // NUEVA FUNCIÓN para obtener colores del gráfico según el tema
@@ -1167,11 +1626,31 @@ function generarReporteParaPeriodo(periodo, ventas, productosMap) {
         totalUsd += parseFloat(venta.total_usd || 0);
         totalBs += parseFloat(venta.total_bs || 0);
 
-        const metodo = venta.tipo_pago || 'No especificado';
-        if (!porMetodo[metodo]) porMetodo[metodo] = { totalUsd: 0, totalBs: 0, count: 0 };
-        porMetodo[metodo].totalUsd += parseFloat(venta.total_usd || 0);
-        porMetodo[metodo].totalBs += parseFloat(venta.total_bs || 0);
-        porMetodo[metodo].count++;
+        try {
+            const pagos = JSON.parse(venta.tipo_pago);
+            if (Array.isArray(pagos) && pagos.length > 0) {
+                pagos.forEach(pago => {
+                    const metodo = pago.metodo || 'No especificado';
+                    const montoUsd = parseFloat(pago.monto || 0);
+                    if (!porMetodo[metodo]) {
+                        porMetodo[metodo] = { totalUsd: 0, count: 0 };
+                    }
+                    porMetodo[metodo].totalUsd += montoUsd;
+                    porMetodo[metodo].count++;
+                });
+            } else {
+                throw new Error('No es un array de pagos válido.');
+            }
+        } catch (e) {
+            // Fallback para datos antiguos o mal formados (ej. una sola cadena de texto)
+            const metodo = venta.tipo_pago || 'No especificado';
+            const montoUsd = parseFloat(venta.total_usd || 0);
+            if (!porMetodo[metodo]) {
+                porMetodo[metodo] = { totalUsd: 0, count: 0 };
+            }
+            porMetodo[metodo].totalUsd += montoUsd;
+            porMetodo[metodo].count++;
+        }
 
         if (venta.detalles) {
             for (const detalle of venta.detalles) {
@@ -1196,10 +1675,11 @@ function generarReporteParaPeriodo(periodo, ventas, productosMap) {
     
     for (const [metodo, data] of Object.entries(porMetodo).sort((a, b) => b[1].totalUsd - a[1].totalUsd)) {
         const row = document.createElement('tr');
+        const totalBsMetodo = data.totalUsd * oficialRate;
         row.innerHTML = `
-            <td>${metodo} (${formatInteger(data.count)} ventas)</td>
+            <td>${metodo} (${formatInteger(data.count)} transacciones)</td>
             <td>$${formatCurrency(data.totalUsd)}</td>
-            <td>Bs ${formatCurrency(data.totalBs)}</td>
+            <td>Bs ${formatCurrency(totalBsMetodo)}</td>
         `;
         tbody.appendChild(row);
     }
@@ -1271,10 +1751,22 @@ function initVistaDevoluciones() {
     document.getElementById('btnBuscarVenta').addEventListener('click', buscarVentaParaDevolucion);
     document.getElementById('devolucionVentaSearch').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
+            e.preventDefault(); // Evitar que el formulario se envíe si hay uno
             buscarVentaParaDevolucion();
         }
     });
     cargarHistorialDevoluciones();
+
+    // Event listeners para los nuevos botones en el contenedor de resultados de devolución
+    document.getElementById('devolucionResultContainer').addEventListener('click', async (e) => {
+        if (e.target.id === 'btnAnularVentaCompleta') {
+            const ventaId = e.target.dataset.ventaId;
+            if (ventaId) handleAnularVentaCompleta(ventaId);
+        } else if (e.target.id === 'btnRegistrarDevolucionesSeleccionadas') {
+            const ventaId = e.target.dataset.ventaId;
+            if (ventaId) handleRegistrarDevolucionesSeleccionadas(ventaId);
+        }
+    });
 }
 
 async function buscarVentaParaDevolucion() {
@@ -1316,6 +1808,7 @@ function renderizarVentaParaDevolucion(venta, devolucionesMap) {
     const container = document.getElementById('devolucionResultContainer');
     
     let itemsHtml = venta.detalles.map(item => {
+        const productoEnCache = productosCache.find(p => p.codigo === item.producto_codigo);
         const cantidadYaDevuelta = devolucionesMap[item.producto_codigo] || 0;
         const cantidadMaxADevolver = item.cantidad - cantidadYaDevuelta;
 
@@ -1323,7 +1816,7 @@ function renderizarVentaParaDevolucion(venta, devolucionesMap) {
             return `
                 <div class="devolucion-item-card disabled">
                     <div class="item-info">
-                        <strong>${item.producto_nombre}</strong>
+                        <strong>${item.producto_nombre} ${productoEnCache ? `(${productoEnCache.marca || 'N/A'})` : ''}</strong>
                         <span>Código: ${item.producto_codigo}</span>
                         <span>Vendido: ${item.cantidad}</span>
                     </div>
@@ -1464,6 +1957,68 @@ function setProductModalMode(mode) {
     }
 }
 
+function updatePaymentSummary() {
+    let totalPagadoUsd = Array.from(document.querySelectorAll('.payment-amount-input'))
+        .reduce((sum, input) => {
+            const container = input.closest('.payment-method-input');
+            // Solo sumar si el contenedor está visible (es decir, su checkbox está marcado)
+            if (container && container.style.display !== 'none') {
+                const val = parseFloat(input.value) || 0;
+                if (input.dataset.currency === 'BS') {
+                    // Convertir Bs a USD para la suma total
+                    return sum + parseFloat((val / oficialRate).toFixed(2)); // Redondear a 2 decimales
+                }
+                return sum + val; // Ya está en USD
+            }
+            return sum;
+        }, 0);
+    totalPagadoUsd = parseFloat(totalPagadoUsd.toFixed(6)); // Asegurar precisión consistente para el total pagado
+    
+    // Redondear el total pagado a 2 decimales para la comparación
+    totalPagadoUsd = parseFloat(totalPagadoUsd.toFixed(2));
+
+    const faltante = totalVentaActual - totalPagadoUsd;
+
+    document.getElementById('modalTotalPagado').textContent = `$ ${formatCurrency(totalPagadoUsd)}`;
+    document.getElementById('modalFaltante').textContent = `$ ${formatCurrency(Math.abs(faltante))}`;
+    document.getElementById('modalFaltanteBs').textContent = `Bs ${formatCurrency(parseFloat((Math.abs(faltante) * oficialRate).toFixed(2)))}`;
+
+    const faltanteLabel = document.getElementById('faltanteLabel');
+    const faltanteValue = document.getElementById('modalFaltante');
+    const faltanteBsValue = document.getElementById('modalFaltanteBs');
+    const btnConfirmar = document.getElementById('btnConfirmarVenta');
+    const pagoPendiente = document.getElementById('pagoPendienteCheckbox')?.checked || false;
+
+    // Resetear estilos
+    faltanteLabel.style.color = 'var(--btn-red)';
+    faltanteValue.style.color = 'var(--btn-red)';
+    faltanteBsValue.style.color = 'var(--btn-red)';
+
+    if (pagoPendiente) {
+        btnConfirmar.disabled = false;
+        btnConfirmar.textContent = 'Guardar como Pendiente';
+        faltanteLabel.textContent = 'Crédito Pendiente';
+        faltanteLabel.style.color = 'var(--btn-orange)';
+        faltanteValue.style.color = 'var(--btn-orange)';
+        faltanteBsValue.style.color = 'var(--btn-orange)';
+    } else if (faltante < -0.01) { // Sobrante
+        faltanteLabel.textContent = '¡Sobrante!';
+        btnConfirmar.disabled = true;
+        btnConfirmar.textContent = 'Monto excede el total';
+        showToast('El monto pagado excede el total de la venta.', 'error', 2000); // Mensaje explícito
+    } else if (Math.abs(faltante) < 0.01) { // Completo
+        faltanteLabel.textContent = 'Completo';
+        faltanteLabel.style.color = 'var(--btn-green)';
+        faltanteValue.style.color = 'var(--btn-green)';
+        faltanteBsValue.style.color = 'var(--btn-green)';
+        btnConfirmar.disabled = false;
+        btnConfirmar.textContent = 'Procesar Pago';
+    } else { // Faltante
+        faltanteLabel.textContent = 'Faltante';
+        btnConfirmar.disabled = true;
+        btnConfirmar.textContent = 'Monto no coincide';
+    }
+}
 // --- INICIO: Lógica de Tema (Claro/Oscuro) ---
 function aplicarTema(theme) {
     document.documentElement.dataset.theme = theme;
@@ -1584,13 +2139,86 @@ document.addEventListener('click', (e) => {
         const codigo = e.target.dataset.codigoQuitar;
         if (codigo) quitarDeParaLlevar(codigo);
     }
+
+    // --- INICIO: Lógica para modal de pago múltiple ---
+    if (e.target.matches('.btn-fill-remaining')) {
+        const id = e.target.dataset.targetId;
+        const amountInput = document.getElementById(`amount_${id}`);
+        const inputCurrency = amountInput.dataset.currency; // 'USD' o 'BS'
+        
+        // 1. Calcular el total pagado en USD de los OTROS campos
+        let totalPagadoSinActualUsd = Array.from(document.querySelectorAll('.payment-amount-input'))
+            .filter(input => input.id !== `amount_${id}`)
+            .reduce((sum, input) => {
+                const container = input.closest('.payment-method-input');
+                if (container && container.style.display !== 'none') {
+                    const val = parseFloat(input.value) || 0;
+                    if (input.dataset.currency === 'BS' && oficialRate > 0) {
+                        return sum + (val / oficialRate); // Convertir Bs a USD
+                    } else {
+                        return sum + val; // Ya está en USD
+                    }
+                }
+                return sum;
+            }, 0);
+        totalPagadoSinActualUsd = parseFloat(totalPagadoSinActualUsd.toFixed(2)); // Redondear a 2 decimales
+        
+        // 2. Calcular el monto faltante en USD
+        const faltanteUsd = parseFloat((totalVentaActual - totalPagadoSinActualUsd).toFixed(2));
+        
+        // 3. Llenar el campo actual con el monto faltante en la moneda correcta
+        if (faltanteUsd > 0) {
+            if (inputCurrency === 'BS' && oficialRate > 0) {
+                // Se calcula el valor en Bolívares y se redondea a 2 decimales para el input.
+                amountInput.value = parseFloat((faltanteUsd * oficialRate).toFixed(2)).toFixed(2);
+            } else {
+                // Se usa el valor en Dólares y se redondea a 2 decimales para el input.
+                amountInput.value = faltanteUsd.toFixed(2); // Asegurar string con 2 decimales
+            }
+            updatePaymentSummary();
+        }
+    }
+    // --- FIN: Lógica para modal de pago múltiple ---
+
+
+
+
+
+    // Modales
+    if (e.target.matches('[data-modal-target]')) {
+        const modalId = e.target.dataset.modalTarget;
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            if (modalId === 'modalCategoria') initModalCategorias();
+            if (modalId === 'modalProducto') initModalProducto();
+            modal.classList.add('active');
+        }
+    }
+    if (e.target.matches('[data-modal-close]')) {
+        const modal = e.target.closest('.modal-overlay');
+        if (modal) modal.classList.remove('active');
+    }
+
+    // Botones de la vista CAJA
+    if (e.target.matches('#btnCajaLimpiar')) {
+        showConfirmation('¿Estás seguro de que quieres limpiar la caja?', () => {
+            productosParaLlevar = [];
+            renderizarParaLlevar();
+            showToast('Caja limpiada.', 'success');
+        });
+    }
+    if (e.target.matches('#btnCajaVender')) {
+        handleAbrirModalVenta();
+    }
+
+
     // Boton de generar PDF en la vista de ventas
     if (e.target.matches('.btn-pdf')) { // Manejar la generación de PDF de forma asíncrona
         handlePdfButtonClick(e.target);
     }
     
     // Botones de cantidad (+/-) en la vista de Caja
-    if (e.target.matches('.quantity-btn')) {
+    if (e.target.matches('.quantity-btn[data-codigo]')) {
         const codigo = e.target.dataset.codigo;
         const input = document.getElementById(`cant_${codigo}`);
         if (!input) return;
@@ -1605,9 +2233,45 @@ document.addEventListener('click', (e) => {
         }
     }
 
-    // Botón para registrar una devolución
-    if (e.target.matches('.btn-registrar-devolucion')) {
-        handleRegistrarDevolucion(e.target);
+    // Botones de cantidad (+/-) en la vista de Productos Cargados
+    if (e.target.matches('.quantity-btn[data-codigo-llevar-control]')) {
+        const codigo = e.target.dataset.codigoLlevarControl;
+        const input = e.target.parentElement.querySelector(`input[data-codigo-llevar="${codigo}"]`);
+        if (!input) return;
+
+        let currentValue = parseInt(input.value, 10);
+        const item = productosParaLlevar.find(p => p.codigo === codigo);
+        if (!item) return;
+
+        const max = item.esAdicional ? 9999 : item.cantidad;
+
+        if (e.target.classList.contains('plus')) {
+            if (currentValue < max) {
+                const newValue = currentValue + 1;
+                input.value = newValue;
+                actualizarCantidadLlevar(codigo, newValue);
+            }
+        } else if (e.target.classList.contains('minus')) {
+            if (currentValue > 1) {
+                const newValue = currentValue - 1;
+                input.value = newValue;
+                actualizarCantidadLlevar(codigo, newValue);
+            }
+        }
+    }
+
+    // Botón para ver detalles de una venta (YA NO PIDE CONTRASEÑA)
+    if (e.target.matches('.btn-ver-detalles-venta')) {
+        const ventaId = e.target.dataset.ventaId;
+        if (ventaId) handleAbrirModalDetallesVenta(ventaId);
+    }
+
+    // Botones de acción en la vista de devoluciones (requieren contraseña)
+    if (e.target.id === 'btnAnularVentaCompleta' || e.target.id === 'btnRegistrarDevolucionesSeleccionadas') {
+        pendingAction = e.target.id === 'btnAnularVentaCompleta' ? 'anular_venta' : 'registrar_devoluciones';
+        pendingActionId = e.target.dataset.ventaId;
+        document.getElementById('modalPasswordVenta').classList.add('active');
+        document.getElementById('adminPassword').focus();
     }
 
     // Botón para editar una venta (abre modal de contraseña)
@@ -1621,6 +2285,28 @@ document.addEventListener('click', (e) => {
                 modal.classList.add('active');
                 document.getElementById('adminPassword').focus();
             }
+        }
+    }
+
+    // Botón para registrar un abono a una venta (AHORA PIDE CONTRASEÑA)
+    if (e.target.matches('.btn-abonar-venta')) {
+        const ventaId = e.target.dataset.ventaId;
+        if (ventaId) {
+            pendingAction = 'abonar'; // Nueva acción pendiente
+            pendingActionId = ventaId;
+            const modal = document.getElementById('modalPasswordVenta');
+            if (modal) {
+                modal.classList.add('active');
+                document.getElementById('adminPassword').focus();
+            }
+        }
+    }
+
+    // Botón para ver detalles de una venta (YA NO PIDE CONTRASEÑA)
+    if (e.target.matches('.btn-ver-detalles-venta')) {
+        const ventaId = e.target.dataset.ventaId;
+        if (ventaId) {
+            handleAbrirModalDetallesVenta(ventaId);
         }
     }
 
@@ -1674,6 +2360,27 @@ document.addEventListener('click', (e) => {
     }
 });
 
+document.addEventListener('change', (e) => {
+    if (e.target.matches('[data-codigo-llevar]')) {
+        const codigo = e.target.dataset.codigoLlevar;
+        actualizarCantidadLlevar(codigo, e.target.value);
+    }
+
+    // Checkbox de método de pago
+    if (e.target.matches('[data-method-id]')) {
+        const id = e.target.dataset.methodId;
+        const inputContainer = document.getElementById(`input_container_${id}`);
+        const amountInput = document.getElementById(`amount_${id}`);
+        inputContainer.style.display = e.target.checked ? 'flex' : 'none';
+        if (!e.target.checked) amountInput.value = '';
+        updatePaymentSummary();
+    }
+
+    if (e.target.matches('#pagoPendienteCheckbox')) {
+        updatePaymentSummary();
+    }
+});
+
 /**
  * Maneja el clic en el botón de PDF para generar una factura.
  * Proporciona feedback visual y manejo de errores.
@@ -1703,14 +2410,6 @@ async function handlePdfButtonClick(btn) {
     }
 }
 
-// Actualizar cantidad en carrito
-document.addEventListener('change', (e) => {
-    if (e.target.matches('[data-codigo-llevar]')) {
-        const codigo = e.target.dataset.codigoLlevar;
-        actualizarCantidadLlevar(codigo, e.target.value);
-    }
-});
-
 // Modal de Venta
 async function handleAbrirModalVenta() {
     if (productosParaLlevar.length === 0) {
@@ -1718,34 +2417,113 @@ async function handleAbrirModalVenta() {
         return;
     }
     await obtenerTasas();
-    const totalUsd = productosParaLlevar.reduce((acc, item) => acc + (item.precio_usdt * item.cantidadLlevar), 0); // Total en USD (USDT)
-    const totalBs = totalUsd * paraleloRate; // Total en Bs (usando tasa paralelo)
+    
+    totalVentaActual = productosParaLlevar.reduce((acc, item) => acc + (item.precio_venta_dolares_bcv * item.cantidadLlevar), 0);
+    totalVentaActual = parseFloat(totalVentaActual.toFixed(2)); // Redondear a 2 decimales para el total de la venta
+    const totalBs = totalVentaActual * oficialRate;
+    
+    // Definir qué métodos de pago son en Bolívares y cuáles en Dólares
+    const metodosEnBolivares = ['Pago Móvil', 'Bolívares en efectivo'];
+
+    const paymentContainer = document.getElementById('paymentMethodsContainer');
+    paymentContainer.innerHTML = METODOS_DE_PAGO.map(metodo => {
+        const id = metodo.toLowerCase().replace(/ /g, '_').replace('ó','o');
+        const isBsMethod = metodosEnBolivares.includes(metodo);
+        const currencyLabel = isBsMethod ? 'Bs' : '$';
+        const inputStep = isBsMethod ? '0.01' : '0.01'; // Ambos pueden tener decimales
+        const placeholderText = `Monto en ${currencyLabel}`;
+
+        return `
+            <div class="payment-method-row">
+                <div class="payment-method-selector">
+                    <input type="checkbox" id="check_${id}" data-method-id="${id}">
+                    <label for="check_${id}">${metodo} (${currencyLabel})</label>
+                </div>
+                <div class="payment-method-input" id="input_container_${id}" style="display: none;">
+                    <input type="number" class="payment-amount-input" step="${inputStep}" placeholder="${placeholderText}" id="amount_${id}" data-method-name="${metodo}" data-currency="${isBsMethod ? 'BS' : 'USD'}">
+                    <button type="button" class="action-btn btn-blue btn-fill-remaining" data-target-id="${id}">FULL</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Añadir listener de 'blur' a los inputs de monto para formatear a dos decimales
+    // y asegurar que el valor sea '0.00' si se deja vacío.
+    document.querySelectorAll('.payment-amount-input').forEach(input => {
+        input.addEventListener('blur', () => {
+            let value = parseFloat(input.value);
+            if (!isNaN(value)) {
+                input.value = value.toFixed(2);
+            } else if (input.value.trim() === '') {
+                input.value = '0.00'; // Si se deja vacío, mostrar '0.00'
+            }
+            updatePaymentSummary(); // Recalcular el resumen después de formatear
+        });
+    });
+
+    document.getElementById('formDatosCliente').reset();
+    document.querySelectorAll('.payment-amount-input').forEach(input => input.value = '');
+    document.querySelectorAll('.payment-method-selector input[type="checkbox"]').forEach(check => check.checked = false);
+    document.querySelectorAll('.payment-method-input').forEach(container => container.style.display = 'none');
+
+    const totalUsd = totalVentaActual;
     document.getElementById('modalTotalUsd').textContent = `$ ${formatCurrency(totalUsd)}`;
     document.getElementById('modalTotalBs').textContent = `Bs ${formatCurrency(totalBs)}`;
-    document.getElementById('lblTasaBcv').textContent = formatCurrency(oficialRate);
-    document.getElementById('lblTasaParalelo').textContent = formatCurrency(paraleloRate);
     document.getElementById('lblTasaBcvBase').textContent = formatCurrency(oficialRate);
     document.getElementById('lblTasaUsdtRef').textContent = formatCurrency(paraleloRate);
 
     const modal = document.getElementById('modalVenta');
     const footer = modal.querySelector('.modal-footer, .modal-buttons');
-    if (footer && !footer.querySelector('#emitirFacturaContainer')) {
+
+    // Contenedor para acciones del lado izquierdo del footer del modal
+    let leftActionsContainer = footer.querySelector('.modal-left-actions');
+    if (!leftActionsContainer) {
+        leftActionsContainer = document.createElement('div');
+        leftActionsContainer.className = 'modal-left-actions';
+        leftActionsContainer.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-right: auto;';
+        footer.insertBefore(leftActionsContainer, footer.firstChild);
+    }
+
+    // Checkbox para "Emitir Factura"
+    if (!leftActionsContainer.querySelector('#emitirFacturaContainer')) {
         const checkboxContainer = document.createElement('div');
         checkboxContainer.id = 'emitirFacturaContainer';
-        checkboxContainer.style.cssText = 'display: flex; align-items: center; margin-right: auto; gap: 8px;';
+        checkboxContainer.style.cssText = 'display: flex; align-items: center; gap: 8px;';
         checkboxContainer.innerHTML = `
             <input type="checkbox" id="emitirFacturaCheckbox" style="width: 18px; height: 18px; cursor: pointer;">
             <label for="emitirFacturaCheckbox" style="font-weight: 600; cursor: pointer; user-select: none;">Emitir factura</label>
         `;
-        footer.insertBefore(checkboxContainer, footer.firstChild);
+        leftActionsContainer.appendChild(checkboxContainer);
     }
-    const chk = document.getElementById('emitirFacturaCheckbox');
-    if (chk) chk.checked = false;
+
+    // Checkbox para "Pago Pendiente"
+    if (!leftActionsContainer.querySelector('#pagoPendienteContainer')) {
+        const pendienteContainer = document.createElement('div');
+        pendienteContainer.id = 'pagoPendienteContainer';
+        pendienteContainer.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+        pendienteContainer.innerHTML = `
+            <input type="checkbox" id="pagoPendienteCheckbox" style="width: 18px; height: 18px; cursor: pointer;">
+            <label for="pagoPendienteCheckbox" style="font-weight: 600; cursor: pointer; user-select: none; color: var(--btn-orange);">Pago pendiente (crédito)</label>
+        `;
+        leftActionsContainer.appendChild(pendienteContainer);
+    }
+
+    const chkFactura = document.getElementById('emitirFacturaCheckbox');
+    if (chkFactura) chkFactura.checked = false;
+    const chkPendiente = document.getElementById('pagoPendienteCheckbox');
+    if (chkPendiente) chkPendiente.checked = false;
+
+    // Añadir listener de input para recalcular en el modal
+    const modalBody = modal.querySelector('.modal-body');
+    modalBody.removeEventListener('input', updatePaymentSummary); // Evitar duplicados
+    modalBody.addEventListener('input', (e) => {
+        if (e.target.classList.contains('payment-amount-input')) updatePaymentSummary();
+    });
 
     modal.classList.add('active');
 }
 
-document.getElementById('formDatosCliente').addEventListener('submit', async (e) => {
+document.getElementById('formDatosCliente')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const nombre = document.getElementById('cliNombre').value.trim();
     const tipoCedula = document.getElementById('cliTipoCedula').value;
@@ -1753,28 +2531,71 @@ document.getElementById('formDatosCliente').addEventListener('submit', async (e)
     const cedulaCompleta = `${tipoCedula}-${numeroCedula}`;
     const telefono = document.getElementById('cliTelefono').value.trim();
     const direccion = document.getElementById('cliDireccion').value.trim();
-    const tipoPago = document.getElementById('cliTipoPago').value;
 
     if (numeroCedula.length > 10) { showToast('La cédula no puede exceder los 10 dígitos.', 'error'); return; }
     if (telefono.length > 16) { showToast('El teléfono no puede exceder los 16 dígitos.', 'error'); return; }
-    if (!tipoPago) { showToast('Selecciona un tipo de pago.', 'error'); return; }
+
+    const pagos = [];
+    document.querySelectorAll('.payment-method-selector input[type="checkbox"]:checked').forEach(check => {
+        const id = check.dataset.methodId;
+        const amountInput = document.getElementById(`amount_${id}`); // Input de monto
+        const inputCurrency = amountInput.dataset.currency; // 'USD' o 'BS'
+        let amount = parseFloat(amountInput.value) || 0;
+        let amountInUsd = amount;
+
+        if (inputCurrency === 'BS') {
+            amountInUsd = amount / oficialRate; // Convertir Bs a USD
+        }
+
+        if (amountInUsd > 0) {
+            pagos.push({
+                metodo: amountInput.dataset.methodName,
+                monto: amountInUsd // Siempre guardar el monto en USD
+            });
+        }
+    });
+
+    if (pagos.length === 0) {
+        showToast('Debes agregar al menos un método de pago con un monto.', 'error');
+        return;
+    }
+
+    const tipoPago = JSON.stringify(pagos);
 
     const btnSubmit = document.getElementById('btnConfirmarVenta');
     btnSubmit.disabled = true;
     btnSubmit.textContent = 'Procesando...';
-
+    
     try {
         const emitirFactura = document.getElementById('emitirFacturaCheckbox')?.checked || false;
+        const pagoPendiente = document.getElementById('pagoPendienteCheckbox')?.checked || false;
 
-        const totalUsd = productosParaLlevar.reduce((acc, item) => acc + (item.precio_usdt * item.cantidadLlevar), 0);
-        const totalBs = totalUsd * paraleloRate;
+        const totalPagadoValidacion = pagos.reduce((sum, p) => sum + p.monto, 0);
+        
+        // Solo validar la coincidencia de pago si NO es un pago pendiente
+        if (!pagoPendiente && Math.abs(totalVentaActual - totalPagadoValidacion) > 0.01) {
+            showToast('El total pagado no coincide con el total de la venta. Revisa los montos.', 'error');
+            btnSubmit.disabled = false;
+            btnSubmit.textContent = 'Procesar Pago';
+            return;
+        }
 
-        const { data: ventaData, error: ventaError } = await _supabase.from('ventas').insert([{ cliente_nombre: nombre, cliente_cedula: cedulaCompleta, cliente_telefono: telefono, cliente_direccion: direccion, tipo_pago: tipoPago, total_usd: totalUsd, total_bs: totalBs }]).select().single();
+        const totalUsd = totalVentaActual;
+        const totalBs = totalUsd * oficialRate;
+
+        const ventaInsertData = { cliente_nombre: nombre, cliente_cedula: cedulaCompleta, cliente_telefono: telefono, cliente_direccion: direccion, tipo_pago: tipoPago, total_usd: totalUsd, total_bs: totalBs, estado_pago: pagoPendiente ? 'pendiente' : 'pagado' };
+
+        const { data: ventaData, error: ventaError } = await _supabase
+            .from('ventas')
+            .insert([ventaInsertData])
+            .select()
+            .single();
         if (ventaError) throw ventaError;
         const ventaId = ventaData.id;
 
         for (const item of productosParaLlevar) {
-            const { error: detalleError } = await _supabase.from('detalle_ventas').insert([{ venta_id: ventaId, producto_codigo: item.codigo, producto_nombre: item.nombre, cantidad: item.cantidadLlevar, precio_unitario: item.precio_usdt, tipo_precio_usado: tipoPago }]);
+            // CORRECCIÓN: Guardar el precio_unitario correcto y un tipo de precio consistente
+            const { error: detalleError } = await _supabase.from('detalle_ventas').insert([{ venta_id: ventaId, producto_codigo: item.codigo, producto_nombre: item.nombre, cantidad: item.cantidadLlevar, precio_unitario: item.precio_venta_dolares_bcv, tipo_precio_usado: 'BCV' }]);
             if (detalleError) throw detalleError;
             if (!item.esAdicional) {
                 const nuevoStock = item.cantidad - item.cantidadLlevar;
@@ -1799,7 +2620,8 @@ document.getElementById('formDatosCliente').addEventListener('submit', async (e)
                     producto_codigo: item.codigo,
                     producto_nombre: item.nombre,
                     cantidad: item.cantidadLlevar,
-                    precio_unitario: item.precio_usdt,
+                    // CORRECCIÓN: Pasar el precio_unitario correcto al PDF
+                    precio_unitario: item.precio_venta_dolares_bcv,
                 }))
             };
             await generarFacturaPDF(ventaCompleta, paraleloRate, productosCache);
@@ -1868,6 +2690,12 @@ async function initModalCategorias() {
             showToast('El nombre de la categoría no puede estar vacío.', 'error');
             return;
         }
+
+        const categoriaAntigua = categoriasCache.find(c => c.id == catId);
+        if (!categoriaAntigua) {
+            showToast('Categoría no encontrada en caché.', 'error');
+            return;
+        }
         
         showConfirmation(`¿Confirmas el cambio de nombre a "${nuevoNombre}"?`, async () => {
             const { error } = await _supabase.from('categorias').update({ nombre: nuevoNombre }).eq('id', catId);
@@ -1875,11 +2703,20 @@ async function initModalCategorias() {
                 showToast(`Error al editar: ${error.message}`, 'error');
                 return;
             }
+
+            // Actualizar la categoría en los productos que la usan
+            const { error: updateProdError } = await _supabase.from('productos').update({ categoria: nuevoNombre }).eq('categoria', categoriaAntigua.nombre);
+            if (updateProdError) {
+                console.error('Error al actualizar productos con la nueva categoría:', updateProdError);
+                showToast(`Categoría actualizada, pero hubo un error al actualizar productos asociados: ${updateProdError.message}`, 'warning');
+            }
+
             document.getElementById('catNombre').value = '';
             document.getElementById('catId').value = '';
             categoriaSeleccionadaId = null;
             cargarCategorias();
             socket.emit('cambio-dato', { type: 'categories' });
+            socket.emit('cambio-dato', { type: 'products' }); // Emitir también un cambio en productos
             showToast('Categoría actualizada.', 'success');
         });
     });
@@ -1943,7 +2780,18 @@ async function initModalProducto() {
     form.closest('.modal').querySelector('h3').textContent = 'Cargar Nuevo Producto';
     
     document.getElementById('prodEditCodigo').value = ''; // Limpiar el código de edición
-    document.getElementById('prodCodigo').readOnly = false; // Permitir editar el código para nuevos productos
+    document.getElementById('prodCodigo').readOnly = false; // Allow editing code for new products
+
+    // --- INICIO: Lógica de cantidad para NUEVO producto ---
+    const cantidadContainer = document.getElementById('prodCantidadContainer');
+    cantidadContainer.style.gridTemplateColumns = '1fr'; // Mostrar una sola columna
+
+    document.getElementById('cantidadActualGroup').style.display = 'none';
+
+    const cantidadIngresarGroup = document.getElementById('cantidadIngresarGroup');
+    cantidadIngresarGroup.style.display = 'block';
+    document.getElementById('labelCantidadIngresar').textContent = 'Cantidad a Ingresar';
+    // --- FIN: Lógica de cantidad para NUEVO producto ---
 
     if (form) {
         setProductModalMode('manual');
@@ -2008,12 +2856,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // Determinar la cantidad final
+            let cantidadFinal;
+            if (editCodigo) {
+                const cantidadActual = parseInt(document.getElementById('prodCantidadActual').value, 10) || 0;
+                const cantidadIngresada = parseInt(document.getElementById('prodCantidad').value, 10) || 0;
+                cantidadFinal = cantidadActual + cantidadIngresada;
+            } else {
+                cantidadFinal = parseInt(document.getElementById('prodCantidad').value, 10);
+            }
+
             const productData = {
                 categoria: document.getElementById('prodCategoria').value,
                 nombre: document.getElementById('prodNombre').value,
                 marca: document.getElementById('prodMarca').value.trim(),
                 ubicacion: document.getElementById('prodUbicacion').value.trim(),
-                cantidad: parseInt(document.getElementById('prodCantidad').value),
+                cantidad: cantidadFinal,
                 precio_costo_dolares_bcv: precioCostoDolaresBcv,
                 precio_venta_dolares_bcv: precioVentaDolaresBcv,
                 precio_usdt: precioUsdt,
@@ -2094,6 +2952,12 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error("Error: El formulario con id 'formAdicional' no fue encontrado al cargar la página.");
     }
 
+    // Listener para el formulario de abono a venta (se define una sola vez)
+    const formAbonoVenta = document.getElementById('formAbonoVenta');
+    if (formAbonoVenta) {
+        formAbonoVenta.addEventListener('submit', handleConfirmarAbono);
+    }
+
     // --- INICIO: Lógica para editar ventas ---
     const formPasswordVenta = document.getElementById('formPasswordVenta');
     if (formPasswordVenta) {
@@ -2136,27 +3000,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         showToast('Error: No se encontró la venta para editar.', 'error');
                         return;
                     }
-                    // Poblar y abrir el modal de edición
-                    document.getElementById('editVentaId').value = venta.id;
-                    document.getElementById('editVentaIdDisplay').textContent = `#${venta.id}`;
-                    document.getElementById('editCliNombre').value = venta.cliente_nombre;
-                    
-                    if (venta.cliente_cedula && venta.cliente_cedula.includes('-')) {
-                        const cedulaParts = venta.cliente_cedula.split('-');
-                        document.getElementById('editCliTipoCedula').value = cedulaParts[0];
-                        document.getElementById('editCliCedula').value = cedulaParts.slice(1).join('-');
-                    } else {
-                        document.getElementById('editCliTipoCedula').value = 'V';
-                        document.getElementById('editCliCedula').value = venta.cliente_cedula || '';
-                    }
-
-                    document.getElementById('editCliTelefono').value = venta.cliente_telefono;
-                    document.getElementById('editCliDireccion').value = venta.cliente_direccion || '';
-                    document.getElementById('editCliTipoPago').value = venta.tipo_pago;
-
-                    document.getElementById('modalEditarVenta').classList.add('active');
+                    handleAbrirModalEditarVenta(venta);
                 } else if (pendingAction === 'delete') {
                     handleDeleteSale(pendingActionId);
+                } else if (pendingAction === 'abonar') {
+                    handleAbrirModalAbono(pendingActionId);
+                } else if (pendingAction === 'anular_venta') {
+                    handleAnularVentaCompleta(pendingActionId); // Llama a la función directamente
+                } else if (pendingAction === 'registrar_devoluciones') {
+                    handleRegistrarDevolucionesSeleccionadas(pendingActionId); // Llama a la función directamente
                 }
 
             } catch (err) {
@@ -2183,16 +3035,41 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.textContent = 'Guardando...';
 
             const ventaId = document.getElementById('editVentaId').value;
+            const totalDeLaVenta = parseFloat(document.getElementById('editVentaTotalUsd').value);
             const tipoCedula = document.getElementById('editCliTipoCedula').value;
             const numeroCedula = document.getElementById('editCliCedula').value.trim();
             const cedulaCompleta = `${tipoCedula}-${numeroCedula}`;
+
+            // Recolectar los nuevos datos de pago
+            const nuevosPagos = [];
+            document.querySelectorAll('#editPaymentMethodsContainer input[type="checkbox"]:checked').forEach(check => {
+                const id = check.dataset.editMethodId;
+                const amountInput = document.getElementById(`amount_${id}`);
+                let amount = parseFloat(amountInput.value) || 0;
+                let amountInUsd = amount;
+
+                if (amountInput.dataset.currency === 'BS' && oficialRate > 0) {
+                    amountInUsd = amount / oficialRate;
+                }
+
+                if (amountInUsd > 0) {
+                    nuevosPagos.push({
+                        metodo: amountInput.dataset.methodName,
+                        monto: parseFloat(amountInUsd.toFixed(2))
+                    });
+                }
+            });
+
+            const nuevoTotalPagado = nuevosPagos.reduce((sum, p) => sum + p.monto, 0);
+            const nuevoEstadoPago = (nuevoTotalPagado + 0.01) >= totalDeLaVenta ? 'pagado' : 'pendiente';
 
             const updatedData = {
                 cliente_nombre: document.getElementById('editCliNombre').value.trim(),
                 cliente_cedula: cedulaCompleta,
                 cliente_telefono: document.getElementById('editCliTelefono').value.trim(),
                 cliente_direccion: document.getElementById('editCliDireccion').value.trim(),
-                tipo_pago: document.getElementById('editCliTipoPago').value
+                tipo_pago: JSON.stringify(nuevosPagos),
+                estado_pago: nuevoEstadoPago
             };
 
             try {
