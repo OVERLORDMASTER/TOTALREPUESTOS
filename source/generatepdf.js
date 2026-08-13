@@ -168,10 +168,23 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     `;
     doc.head.appendChild(style);
 
-    venta.detalles.forEach(item => {
-        const precioUnitarioBs = formatCurrency(item.precio_unitario * saleRate);
-        const subtotalBs = formatCurrency(item.cantidad * item.precio_unitario * saleRate);
-        const producto = productosCache.find(p => p.codigo === item.producto_codigo);
+    // Normalizar detalles y filtrar filas vacías o placeholders
+    const detallesArr = Array.isArray(venta.detalles) ? venta.detalles : [];
+    const detallesValidos = detallesArr.filter(item => {
+        if (!item || typeof item !== 'object') return false;
+        const nombre = (item.producto_nombre || '').toString().trim();
+        const codigo = (item.producto_codigo || '').toString().trim();
+        const cantidad = Number(item.cantidad) || 0;
+        const precio = Number(item.precio_unitario) || 0;
+        // Considerar válido si contiene nombre o código, o cantidad/precio mayor que cero
+        return nombre !== '' || codigo !== '' || cantidad > 0 || precio > 0;
+    });
+
+    detallesValidos.forEach(item => {
+        const qty = Number(item.cantidad) || 0;
+        const precioUnitarioBs = formatCurrency((Number(item.precio_unitario) || 0) * saleRate);
+        const subtotalBs = formatCurrency(qty * (Number(item.precio_unitario) || 0) * saleRate);
+        const producto = productosCache.find(p => p.codigo === (item.producto_codigo || ''));
         const marca = producto ? (producto.marca || '') : '';
 
         const row = doc.createElement('tr');
@@ -181,7 +194,7 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
             <td><div>${marca}</div></td>
             <td><div class="precioBS">${precioUnitarioBs}</div></td>
             <td><div class="subtotalBS">${subtotalBs}</div></td>
-            <td><div class="uds">${formatInteger(item.cantidad)}</div></td>
+            <td><div class="uds">${formatInteger(qty)}</div></td>
             <td class="no-print"></td>
         `;
         tableBody.appendChild(row);
@@ -193,6 +206,9 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     doc.body.appendChild(footerCover);
 
     doc.querySelector('#totalBS')?.setAttribute('value', formatCurrency(parseFloat(venta.total_bs)));
+
+    // Eliminar scripts que puedan ejecutar código en el iframe (p. ej. addRow en DOMContentLoaded)
+    doc.querySelectorAll('script').forEach(s => s.remove());
 
     const finalHtml = doc.documentElement.outerHTML;
     const iframe = document.createElement('iframe');

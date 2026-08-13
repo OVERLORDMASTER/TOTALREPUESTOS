@@ -969,6 +969,13 @@ async function _deleteSaleAndRestoreStock(ventaParaEliminar) {
     // 3. Eliminar la venta principal
     const { error: ventaError } = await _supabase.from('ventas').delete().eq('id', ventaParaEliminar.id);
     if (ventaError) throw new Error('Fallo al eliminar la venta principal.');
+
+    // 4. Reiniciar la secuencia del ID para reutilizar IDs si se borra el último
+    const { error: resetError } = await _supabase.rpc('reset_ventas_id_sequence');
+    if (resetError) {
+        // No es un error crítico, pero es bueno saberlo.
+        console.warn('No se pudo reiniciar la secuencia de IDs de ventas. Asegúrate de que la función "reset_ventas_id_sequence" exista en tu base de datos.', resetError);
+    }
 }
 
 async function handleDeleteSale(ventaId) {
@@ -1266,13 +1273,24 @@ function updateEditPaymentSummary() {
     document.getElementById('editModalFaltante').textContent = `$ ${formatCurrency(Math.abs(faltante))}`;
 
     document.getElementById('editModalFaltanteBs').textContent = `Bs ${formatCurrency(Math.abs(faltante) * oficialRate)}`;
+    
     const faltanteLabel = document.getElementById('editFaltanteLabel');
     const btnConfirmar = document.getElementById('btnConfirmarEdicionVenta');
+    const pagoPendiente = document.getElementById('editPagoPendienteCheckbox')?.checked || false; // Leer checkbox
 
+    // Resetear estilos
     faltanteLabel.style.color = 'var(--btn-red)';
     document.getElementById('editModalFaltante').style.color = 'var(--btn-red)';
+    document.getElementById('editModalFaltanteBs').style.color = 'var(--btn-red)';
 
-    if (faltante < -0.01) { // Sobrante
+    if (pagoPendiente) {
+        btnConfirmar.disabled = false;
+        btnConfirmar.textContent = 'Guardar como Pendiente';
+        faltanteLabel.textContent = 'Crédito Pendiente';
+        faltanteLabel.style.color = 'var(--btn-orange)';
+        document.getElementById('editModalFaltante').style.color = 'var(--btn-orange)';
+        document.getElementById('editModalFaltanteBs').style.color = 'var(--btn-orange)';
+    } else if (faltante < -0.01) { // Sobrante
         faltanteLabel.textContent = '¡Sobrante!';
         btnConfirmar.disabled = true;
         btnConfirmar.textContent = 'Monto excede el total';
@@ -1280,12 +1298,13 @@ function updateEditPaymentSummary() {
         faltanteLabel.textContent = 'Completo';
         faltanteLabel.style.color = 'var(--btn-green)';
         document.getElementById('editModalFaltante').style.color = 'var(--btn-green)';
+        document.getElementById('editModalFaltanteBs').style.color = 'var(--btn-green)';
         btnConfirmar.disabled = false;
         btnConfirmar.textContent = 'Guardar Cambios';
     } else { // Faltante
         faltanteLabel.textContent = 'Faltante';
-        btnConfirmar.disabled = false; // Permitir guardar con deuda (pendiente)
-        btnConfirmar.textContent = 'Guardar como Pendiente';
+        btnConfirmar.disabled = true; // Deshabilitar si el pago está incompleto y no es crédito
+        btnConfirmar.textContent = 'Monto no coincide';
     }
 }
 
@@ -1312,6 +1331,34 @@ async function handleAbrirModalEditarVenta(venta) {
     document.getElementById('editCliDireccion').value = venta.cliente_direccion || '';
     document.getElementById('editModalTotalUsd').textContent = `$ ${formatCurrency(totalDeLaVenta)}`;
     document.getElementById('editModalTotalBs').textContent = `Bs ${formatCurrency(totalDeLaVenta * oficialRate)}`;
+
+    // --- NUEVO: Añadir checkbox de pago pendiente ---
+    const modal = document.getElementById('modalEditarVenta');
+    const footer = modal.querySelector('.modal-footer, .modal-buttons');
+    if (footer) {
+        let leftActionsContainer = footer.querySelector('.modal-left-actions');
+        if (!leftActionsContainer) {
+            leftActionsContainer = document.createElement('div');
+            leftActionsContainer.className = 'modal-left-actions';
+            leftActionsContainer.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-right: auto;';
+            footer.insertBefore(leftActionsContainer, footer.firstChild);
+        }
+
+        if (!leftActionsContainer.querySelector('#editPagoPendienteContainer')) {
+            const pendienteContainer = document.createElement('div');
+            pendienteContainer.id = 'editPagoPendienteContainer';
+            pendienteContainer.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+            pendienteContainer.innerHTML = `
+                <input type="checkbox" id="editPagoPendienteCheckbox" style="width: 18px; height: 18px; cursor: pointer;">
+                <label for="editPagoPendienteCheckbox" style="font-weight: 600; cursor: pointer; user-select: none; color: var(--btn-orange);">Pago pendiente (crédito)</label>
+            `;
+            leftActionsContainer.appendChild(pendienteContainer);
+        }
+    }
+    const chkPendiente = document.getElementById('editPagoPendienteCheckbox');
+    if (chkPendiente) {
+        chkPendiente.checked = venta.estado_pago === 'pendiente';
+    }
 
     // 2. Generar inputs de pago
     const metodosEnBolivares = ['Pago Móvil', 'Bolívares en efectivo'];
@@ -1362,12 +1409,16 @@ async function handleAbrirModalEditarVenta(venta) {
     // 4. Añadir listeners
     const modalBody = document.getElementById('formEditarVenta');
     const updateHandler = (e) => {
-        if (e.target.classList.contains('edit-payment-amount-input')) {
+        // MODIFICADO: también actualizar al cambiar el checkbox
+        if (e.target.classList.contains('edit-payment-amount-input') || e.target.id === 'editPagoPendienteCheckbox') {
             updateEditPaymentSummary();
         }
     };
-    modalBody.removeEventListener('input', modalBody.updateHandler);
+    // MODIFICADO: usar 'change' para el checkbox y 'input' para los montos
+    modalBody.removeEventListener('input', modalBody.updateHandler); // Evitar duplicados
+    modalBody.removeEventListener('change', modalBody.updateHandler); // Evitar duplicados
     modalBody.addEventListener('input', updateHandler);
+    modalBody.addEventListener('change', updateHandler);
     modalBody.updateHandler = updateHandler;
     
     modalBody.querySelectorAll('[data-edit-method-id]').forEach(check => {
@@ -2140,6 +2191,70 @@ function guardarYAplicarTema(theme) {
     aplicarTema(theme);
 }
 
+async function proceedWithReset() {
+    const btn = document.getElementById('btnReiniciarVentas');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Borrando...';
+
+    try {
+        // 1. Borrar todos los detalles de ventas
+        const { error: detError } = await _supabase.from('detalle_ventas').delete().neq('id', -1);
+        if (detError) throw new Error(`Error al borrar detalles de ventas: ${detError.message}`);
+
+        // 2. Borrar todas las devoluciones
+        const { error: devError } = await _supabase.from('devoluciones').delete().neq('id', -1);
+        if (devError) throw new Error(`Error al borrar devoluciones: ${devError.message}`);
+
+        // 3. Borrar todas las ventas
+        const { error: venError } = await _supabase.from('ventas').delete().neq('id', -1);
+        if (venError) throw new Error(`Error al borrar ventas: ${venError.message}`);
+        
+        // 4. Llamar a la función para reiniciar la secuencia del ID
+        const { error: rpcError } = await _supabase.rpc('reset_ventas_id_sequence');
+        if (rpcError) {
+            throw new Error(`Error al reiniciar el contador de IDs: ${rpcError.message}. Asegúrate de que la función 'reset_ventas_id_sequence' exista en la base de datos.`);
+        }
+
+        showToast('¡Éxito! Todos los datos de ventas han sido borrados y los IDs se han reiniciado.', 'success', 5000);
+        
+        // Recargar vistas relevantes si están activas
+        const vistaActiva = document.querySelector('.nav-btn.active').textContent.trim().toLowerCase();
+        if (['ventas', 'reportes', 'devoluciones'].includes(vistaActiva)) {
+            cargarVista(vistaActiva);
+        }
+
+    } catch (error) {
+        console.error('Error al reiniciar las ventas:', error);
+        showToast(error.message, 'error', 7000);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+}
+
+async function handleReiniciarVentas() {
+    const confirmed = await showToast(
+        '¿Estás SEGURO de que quieres borrar TODAS las ventas, devoluciones y reiniciar los IDs? Esta acción es IRREVERSIBLE.',
+        'confirm'
+    );
+ 
+    if (!confirmed) {
+        showToast('Operación cancelada.', 'info');
+        return;
+    }
+ 
+    // Abrir modal de contraseña en lugar de prompt
+    const modal = document.getElementById('modalResetPassword');
+    if (modal) {
+        modal.classList.add('active');
+        const input = document.getElementById('resetPasswordInput');
+        if (input) input.focus();
+    } else {
+        showToast('Error: No se encontró el modal de confirmación.', 'error');
+    }
+}
+
 function cargarAjustesTema() {
     const themeSwitch = document.getElementById('themeSwitch');
     if (themeSwitch) {
@@ -2192,6 +2307,30 @@ function initVistaAjustes() {
         showToast('Ajustes guardados.', 'success');
         obtenerTasas(); // Actualizar tasas inmediatamente
     });
+
+    // --- INICIO: Lógica para reiniciar ventas ---
+    const settingsCard = document.querySelector('.settings-card');
+    if (settingsCard && !document.getElementById('btnReiniciarVentas')) {
+        const dangerZoneHtml = `
+            <div class="setting-item" style="border-top: 2px solid var(--btn-red); padding-top: 20px; margin-top: 20px; background-color: rgba(220, 38, 38, 0.05);">
+                <div class="setting-label">
+                    <h4 style="color: var(--btn-red);">Zona Peligrosa</h4>
+                    <p>Esta acción borrará permanentemente todo el historial de ventas y devoluciones para reiniciar los IDs.</p>
+                </div>
+                <div class="setting-control">
+                    <button id="btnReiniciarVentas" class="action-btn btn-del">Reiniciar Base de Datos de Ventas</button>
+                </div>
+            </div>
+        `;
+        const settingsFooter = settingsCard.querySelector('.settings-footer');
+        if (settingsFooter) {
+            settingsFooter.insertAdjacentHTML('beforebegin', dangerZoneHtml);
+        } else {
+            settingsCard.innerHTML += dangerZoneHtml;
+        }
+        document.getElementById('btnReiniciarVentas').addEventListener('click', handleReiniciarVentas);
+    }
+    // --- FIN: Lógica para reiniciar ventas ---
 }
 
 function cargarAjustesTasa() {
@@ -3140,6 +3279,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const numeroCedula = document.getElementById('editCliCedula').value.trim();
             const cedulaCompleta = `${tipoCedula}-${numeroCedula}`;
 
+            const pagoPendiente = document.getElementById('editPagoPendienteCheckbox')?.checked || false; // Obtener estado del checkbox
+
             // Recolectar los nuevos datos de pago
             const nuevosPagos = [];
             document.querySelectorAll('#editPaymentMethodsContainer input[type="checkbox"]:checked').forEach(check => {
@@ -3161,7 +3302,16 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             const nuevoTotalPagado = nuevosPagos.reduce((sum, p) => sum + p.monto, 0);
-            const nuevoEstadoPago = (nuevoTotalPagado + 0.01) >= totalDeLaVenta ? 'pagado' : 'pendiente';
+
+            // Validación: si no es crédito, el pago debe ser completo.
+            if (!pagoPendiente && Math.abs(totalDeLaVenta - nuevoTotalPagado) > 0.01) {
+                showToast('El total pagado no coincide. Revise los montos o marque como "pago pendiente".', 'error');
+                btn.disabled = false;
+                btn.textContent = originalText;
+                return;
+            }
+
+            const nuevoEstadoPago = pagoPendiente ? 'pendiente' : 'pagado';
 
             const updatedData = {
                 cliente_nombre: document.getElementById('editCliNombre').value.trim(),
