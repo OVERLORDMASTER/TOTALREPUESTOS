@@ -3399,6 +3399,15 @@ async function actualizarSelectProductos() {
 // --- INICIALIZACIÓN DE LA APP ---
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Detectar Android y marcar el body para reglas CSS específicas
+    try {
+        if (navigator && /Android/i.test(navigator.userAgent || '')) {
+            document.body.classList.add('platform-android');
+        }
+    } catch (e) {
+        // No bloquear si falla la detección
+        console.warn('Detección de plataforma falló:', e);
+    }
     // --- LÓGICA DE AUTENTICACIÓN Y UI DE USUARIO ---
     const username = localStorage.getItem('usuario');
     const usernameDisplay = document.getElementById('usernameDisplay');
