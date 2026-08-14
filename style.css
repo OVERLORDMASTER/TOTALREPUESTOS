@@ -17,7 +17,6 @@
     --btn-purple: #9333ea;
     --btn-yellow: #eab308;
     --btn-edit-text: #1e293b;
-    --btn-edit-text: white;
 
     --bg-hover: rgba(255, 255, 255, 0.04);
     --shadow-color: rgba(0, 0, 0, 0.5);
@@ -481,24 +480,18 @@ header {
         grid-column: 1 / -1;
     }
 
-    /* Específico para la vista de Inventario en móvil: botones y buscador */
-    @media (max-width: 1024px) {
-        .inventario-actions {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
-            width: 100%;
-            align-items: center;
-        }
+    /* Específico para la vista de Inventario en móvil: botones y buscador (fusionado) */
+    .inventario-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        width: 100%;
+        align-items: center;
+    }
 
-        .inventario-actions #productSearch {
-            grid-column: 1 / -1;
-            width: 100%;
-        }
-
-        .inventario-actions .action-btn {
-            width: 100%;
-        }
+    .inventario-actions #productSearch {
+        grid-column: 1 / -1;
+        width: 100%;
     }
 }
 
@@ -1506,6 +1499,20 @@ footer {
 .toggle-btn.active {
     background-color: var(--btn-blue);
     color: white;
+}
+
+/* NUEVO: Contenedor para alinear un input y un botón en la misma fila */
+.field-group-horizontal {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.field-group-horizontal > select,
+.field-group-horizontal > input {
+    flex-grow: 1; /* El input/select ocupa el espacio restante */
+}
+.field-group-horizontal > button {
+    flex-shrink: 0; /* Evita que el botón se encoja */
 }
 
 /* --- INICIO: Estilos para Métodos de Pago Múltiples --- */

@@ -175,7 +175,11 @@
                 <div class="field-group"><label>Categoría</label><select id="prodCategoria" required><option value="">Selecciona...</option></select></div>
                 <div class="field-group"><label for="prodNombre">Nombre</label><input type="text" id="prodNombre" required></div>
                 <!-- Fila 2 -->
-                <div class="field-group"><label for="prodMarca">Marca</label><input type="text" id="prodMarca" placeholder="Ej: Ford, ACDelco"></div>
+                <div class="field-group">
+                    <label for="prodMarca">Marca</label>
+                    <select id="prodMarca"><option value="">-- Sin Marca --</option></select>
+                    <input type="text" id="prodMarcaNueva" placeholder="Escribe la nueva marca aquí" style="display: none; margin-top: 8px;">
+                </div>
                 <div class="field-group"><label for="prodCodigo">Código</label><input type="text" id="prodCodigo" required maxlength="50"></div>
                 
                 <!-- Fila 3: Cantidades - Abarca las 2 columnas -->

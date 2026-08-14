@@ -204,6 +204,12 @@ socket.on('actualizacion-dato', (data) => {
     if (data.type === 'products' && (vistaActiva === 'inventario de productos' || vistaActiva === 'caja')) {
         cargarVista(vistaActiva);
     }
+    if (data.type === 'brands') {
+        if (document.getElementById('modalProducto').classList.contains('active')) {
+            loadExistingBrands();
+        }
+        if (vistaActiva === 'inventario de productos') loadProducts();
+    }
     if (data.type === 'categories' && (vistaActiva === 'inventario de productos')) {
         cargarVista(vistaActiva);
     }
@@ -225,6 +231,8 @@ let productoSeleccionado = null;
 let modoEdicion = false;
 let categoriaSeleccionadaId = null;
 let categoriasCache = [];
+let marcasCache = [];
+let marcaSeleccionadaId = null;
 let pendingAction = null, pendingActionId = null;
 let productosCache = [];
 let productosParaLlevar = [];
@@ -310,9 +318,28 @@ async function loadProducts() {
     if (!container) return;
     container.innerHTML = '<p style="color: var(--text-muted); padding: 20px;">Cargando productos...</p>';
     await obtenerTasas();
-    const { data: products, error } = await _supabase.from('productos').select('*').order('nombre');
-    if (error) { container.innerHTML = `<p style="color: var(--btn-red);">Error: ${error.message}</p>`; return; }
-    productosCache = products || [];
+    try {
+        const resp = await _supabase.from('productos').select('*').order('nombre');
+        const products = resp.data;
+        const error = resp.error;
+        if (error) {
+            console.error('Supabase error loading productos:', error);
+            container.innerHTML = `<p style="color: var(--btn-red);">Error cargando productos: ${error.message || JSON.stringify(error)}</p>`;
+            return;
+        }
+        if (!products) {
+            console.warn('Supabase returned no data for productos:', resp);
+            container.innerHTML = `<p style="color: var(--btn-red);">No se recibieron productos. Respuesta: ${JSON.stringify(resp)}</p>`;
+            productosCache = [];
+            return;
+        }
+        productosCache = products || [];
+    } catch (err) {
+        console.error('Fatal error loading productos from Supabase:', err);
+        container.innerHTML = `<p style="color: var(--btn-red);">Excepción al cargar productos: ${err.message || JSON.stringify(err)}</p>`;
+        productosCache = [];
+        return;
+    }
     renderProducts(productosCache);
 }
 
@@ -355,9 +382,9 @@ function renderProducts(productsToRender) {
                 <div class="field-group"><label>cantidad</label><div class="product-card-value">${formatInteger(p.cantidad)}</div></div>
                                 <div class="field-group"><label>precio $ en efectivo</label><div class="product-card-value" style="color: var(--btn-green); font-weight: bold;">${formatCurrency(p.precio_usdt)}</div></div>
                 <div class="field-group"><label>precio venta $ bcv</label><div class="product-card-value" style="color: var(--btn-green); font-weight: bold;">${formatCurrency(p.precio_venta_dolares_bcv)}</div></div>
-                <div class="field-group"><label>precio venta bs (bcv)</label><div class="product-card-value" style="color: var(--btn-edit-text); font-weight: bold;">${precioVentaBsBcv}</div></div>
+                <div class="field-group"><label>precio venta bs (bcv)</label><div class="product-card-value" style="color: var(--text-primary); font-weight: bold;">${precioVentaBsBcv}</div></div>
                 <div class="field-group"><label>precio costo $ bcv</label><div class="product-card-value" style="color: var(--btn-green); font-weight: bold;">${formatCurrency(p.precio_costo_dolares_bcv)}</div></div>
-                <div class="field-group"><label>precio costo bs (bcv)</label><div class="product-card-value" style="color: var(--btn-edit-text); font-weight: bold;">${precioCostoBsBcv}</div></div>`;
+                <div class="field-group"><label>precio costo bs (bcv)</label><div class="product-card-value" style="color: var(--text-primary); font-weight: bold;">${precioCostoBsBcv}</div></div>`;
 
             card.addEventListener('click', () => {
                 if (modoEdicion) return;
@@ -386,8 +413,13 @@ async function handleEditarProducto() {
         return;
     }
 
-    // Asegurarse de que las categorías estén cargadas en el menú desplegable
+    // Asegurar que el modal del producto esté preparado (botón Gestionar, listeners, etc.)
+    await setupProductModal();
+
+    // Cargar listas y marcas, luego fijar la marca seleccionada
     await actualizarSelectProductos();
+    await loadExistingBrands();
+    document.getElementById('prodMarca').value = productoSeleccionado.marca || '';
 
     // Abrir el modal y prepararlo para la edición
     const modal = document.getElementById('modalProducto');
@@ -412,7 +444,6 @@ async function handleEditarProducto() {
     // --- FIN: Lógica de cantidad para EDICIÓN ---
 
     document.getElementById('prodUbicacion').value = productoSeleccionado.ubicacion || '';
-    document.getElementById('prodMarca').value = productoSeleccionado.marca || '';
 
     // Poblar el resto de los campos
     const modo = productoSeleccionado.modo_creacion || 'manual';
@@ -562,7 +593,7 @@ function renderCajaProductos(productsToRender) {
                 </div>
                 <div class="caja-v-item">
                     <label>Precio Bs (BCV)</label>
-                    <span style="color: var(--btn-edit-text); font-weight: bold;">${precioVentaBsBcv}</span>
+                    <span style="color: var(--text-primary); font-weight: bold;">${precioVentaBsBcv}</span>
                 </div>
                 <div class="caja-v-item">
                     <label>Precio Dólares (BCV)</label>
@@ -643,7 +674,7 @@ function renderizarParaLlevar() {
                 <span class="caja-list-nombre">${item.nombre}</span>
                 <div class="caja-v-item">
                     <label>Subtotal Bs</label>
-                    <span style="color: var(--btn-edit-text); font-weight: bold;">${subtotalBS}</span>
+                    <span style="color: var(--text-primary); font-weight: bold;">${subtotalBS}</span>
                 </div>
                 <div class="caja-v-item">
                     <label>Subtotal $</label>
@@ -1093,6 +1124,7 @@ async function handleAbrirModalAbono(ventaId) {
                 </div>
                 <div class="payment-method-input" id="input_container_${id}" style="display: none;">
                     <input type="number" class="abono-payment-amount-input" step="0.01" placeholder="${placeholderText}" id="amount_${id}" data-method-name="${metodo}" data-currency="${isBsMethod ? 'BS' : 'USD'}">
+                    <button type="button" class="action-btn btn-blue btn-fill-remaining" data-target-id="${id}">FULL</button>
                 </div>
             </div>
         `;
@@ -1376,6 +1408,7 @@ async function handleAbrirModalEditarVenta(venta) {
                 </div>
                 <div class="payment-method-input" id="input_container_${id}" style="display: none;">
                     <input type="number" class="edit-payment-amount-input" step="0.01" placeholder="Monto en ${currencyLabel}" id="amount_${id}" data-method-name="${metodo}" data-currency="${isBsMethod ? 'BS' : 'USD'}">
+                    <button type="button" class="action-btn btn-blue btn-fill-remaining" data-target-id="${id}">FULL</button>
                 </div>
             </div>
         `;
@@ -2390,45 +2423,66 @@ document.addEventListener('click', (e) => {
         if (codigo) quitarDeParaLlevar(codigo);
     }
 
-    // --- INICIO: Lógica para modal de pago múltiple ---
+    // --- INICIO: Lógica para el botón "FULL" en modales de pago ---
     if (e.target.matches('.btn-fill-remaining')) {
-        const id = e.target.dataset.targetId;
-        const amountInput = document.getElementById(`amount_${id}`);
-        const inputCurrency = amountInput.dataset.currency; // 'USD' o 'BS'
-        
-        // 1. Calcular el total pagado en USD de los OTROS campos
-        let totalPagadoSinActualUsd = Array.from(document.querySelectorAll('.payment-amount-input'))
-            .filter(input => input.id !== `amount_${id}`)
+        const button = e.target;
+        const modal = button.closest('.modal-overlay');
+        if (!modal) return;
+
+        const targetId = button.dataset.targetId;
+        const targetInput = document.getElementById(`amount_${targetId}`);
+        if (!targetInput) return;
+
+        let totalAmount = 0;
+        let inputSelector = '';
+        let summaryUpdater = () => {};
+
+        if (modal.id === 'modalVenta') {
+            totalAmount = totalVentaActual;
+            inputSelector = '.payment-amount-input';
+            summaryUpdater = updatePaymentSummary;
+        } else if (modal.id === 'modalEditarVenta') {
+            totalAmount = parseFloat(document.getElementById('editVentaTotalUsd').value) || 0;
+            inputSelector = '.edit-payment-amount-input';
+            summaryUpdater = updateEditPaymentSummary;
+        } else if (modal.id === 'modalAbonoVenta') {
+            const faltanteText = document.getElementById('abonoFaltante').textContent;
+            totalAmount = parseFloat(faltanteText.replace(/[^0-9.,-]/g, '').replace(',', '.')) || 0;
+            inputSelector = '.abono-payment-amount-input';
+            const ventaTotal = parseFloat(document.getElementById('abonoTotalVenta').textContent.replace(/[^0-9.,-]/g, '').replace(',', '.')) || 0;
+            const yaPagado = parseFloat(document.getElementById('abonoTotalPagado').textContent.replace(/[^0-9.,-]/g, '').replace(',', '.')) || 0;
+            summaryUpdater = () => updateAbonoSummary(ventaTotal, yaPagado);
+        }
+
+        if (totalAmount <= 0 || !inputSelector) return;
+
+        let totalPaidByOthers = Array.from(modal.querySelectorAll(inputSelector))
+            .filter(input => input.id !== targetInput.id)
             .reduce((sum, input) => {
                 const container = input.closest('.payment-method-input');
                 if (container && container.style.display !== 'none') {
                     const val = parseFloat(input.value) || 0;
                     if (input.dataset.currency === 'BS' && oficialRate > 0) {
-                        return sum + (val / oficialRate); // Convertir Bs a USD
-                    } else {
-                        return sum + val; // Ya está en USD
+                        return sum + (val / oficialRate);
                     }
+                    return sum + val;
                 }
                 return sum;
             }, 0);
-        totalPagadoSinActualUsd = parseFloat(totalPagadoSinActualUsd.toFixed(2)); // Redondear a 2 decimales
         
-        // 2. Calcular el monto faltante en USD
-        const faltanteUsd = parseFloat((totalVentaActual - totalPagadoSinActualUsd).toFixed(2));
-        
-        // 3. Llenar el campo actual con el monto faltante en la moneda correcta
-        if (faltanteUsd > 0) {
-            if (inputCurrency === 'BS' && oficialRate > 0) {
-                // Se calcula el valor en Bolívares y se redondea a 2 decimales para el input.
-                amountInput.value = parseFloat((faltanteUsd * oficialRate).toFixed(2)).toFixed(2);
+        totalPaidByOthers = parseFloat(totalPaidByOthers.toFixed(2));
+        const remainingAmountUsd = parseFloat((totalAmount - totalPaidByOthers).toFixed(2));
+
+        if (remainingAmountUsd > 0) {
+            if (targetInput.dataset.currency === 'BS' && oficialRate > 0) {
+                targetInput.value = (remainingAmountUsd * oficialRate).toFixed(2);
             } else {
-                // Se usa el valor en Dólares y se redondea a 2 decimales para el input.
-                amountInput.value = faltanteUsd.toFixed(2); // Asegurar string con 2 decimales
+                targetInput.value = remainingAmountUsd.toFixed(2);
             }
-            updatePaymentSummary();
+            summaryUpdater();
         }
     }
-    // --- FIN: Lógica para modal de pago múltiple ---
+    // --- FIN: Lógica para el botón "FULL" en modales de pago ---
     // Boton de generar PDF en la vista de ventas
     if (e.target.matches('.btn-pdf')) { // Manejar la generación de PDF de forma asíncrona
         handlePdfButtonClick(e.target);
@@ -2971,13 +3025,21 @@ async function cargarCategorias(filtro = '') {
 
 function renderizarListaCategorias(filtro = '') {
     const lista = document.getElementById('listaCategorias');
+    if (!lista) return;
     lista.innerHTML = '';
-    categoriasCache.filter(c => c.nombre.toLowerCase().includes(filtro.toLowerCase())).forEach(c => {
+    const categoriasFiltradas = categoriasCache.filter(c => c.nombre.toLowerCase().includes(filtro.toLowerCase()));
+
+    if (categoriasFiltradas.length === 0) {
+        lista.innerHTML = '<li style="color: var(--text-muted); text-align: center; padding: 10px;">No hay categorías para mostrar.</li>';
+        return;
+    }
+
+    categoriasFiltradas.forEach(c => {
         const li = document.createElement('li');
         li.className = `cat-item ${categoriaSeleccionadaId === c.id ? 'selected' : ''}`;
         li.textContent = c.nombre;
         li.onclick = () => {
-            document.querySelectorAll('.cat-item').forEach(el => el.classList.remove('selected'));
+            document.querySelectorAll('#listaCategorias .cat-item').forEach(el => el.classList.remove('selected'));
             li.classList.add('selected');
             categoriaSeleccionadaId = c.id;
             document.getElementById('catNombre').value = c.nombre;
@@ -2987,14 +3049,158 @@ function renderizarListaCategorias(filtro = '') {
     });
 }
 
+// --- INICIO: Funciones para Gestionar Marcas ---
+async function initModalMarcas() {
+    await cargarMarcas();
+    const modal = document.getElementById('modalMarca');
+
+    if (modal.dataset.listenersAttached) return;
+    modal.dataset.listenersAttached = 'true';
+
+    // Añadir listeners de cierre específicos para este modal dinámico
+    modal.addEventListener('click', (e) => {
+        if (e.target.matches('#modalMarca')) { // Si se hace clic en el overlay
+            modal.classList.remove('active');
+        }
+    });
+    document.getElementById('closeModalMarcaBtn').addEventListener('click', () => modal.classList.remove('active'));
+
+    document.getElementById('marcaBuscar').addEventListener('input', (e) => renderizarListaMarcas(e.target.value));
+    
+    document.getElementById('btnAgregarMarca').addEventListener('click', async () => {
+        const nombre = document.getElementById('marcaNombre').value.trim();
+        if (!nombre) {
+            showToast('El nombre de la marca no puede estar vacío.', 'error');
+            return;
+        }
+        // Verificar si la marca ya existe en el caché
+        if (marcasCache.some(m => m.nombre.toLowerCase() === nombre.toLowerCase())) {
+            showToast('Esa marca ya existe.', 'error');
+            return;
+        }
+
+        // Agregar la nueva marca solo al caché local
+        marcasCache.push({ id: nombre, nombre: nombre });
+        marcasCache.sort((a, b) => a.nombre.localeCompare(b.nombre)); // Mantener el orden
+
+        document.getElementById('marcaNombre').value = '';
+        
+        // Actualizar la UI
+        renderizarListaMarcas(); // Actualiza la lista en el modal de gestión
+        await loadExistingBrands(); // Actualiza el <select> en el modal de producto
+        showToast('Marca agregada a la lista. Se guardará al usarla.', 'success');
+    });
+
+    document.getElementById('btnEditarMarca').addEventListener('click', async () => {
+        const nombreAntiguo = document.getElementById('marcaId').value; // El ID ahora es el nombre antiguo
+        const nuevoNombre = document.getElementById('marcaNombre').value.trim();
+
+        if (!nombreAntiguo) {
+            showToast('Selecciona una marca para editar.', 'error');
+            return;
+        }
+        if (!nuevoNombre || nuevoNombre === nombreAntiguo) {
+            showToast('Ingresa un nombre nuevo y diferente.', 'error');
+            return;
+        }
+        
+        showConfirmation(`¿Cambiar la marca "${nombreAntiguo}" a "${nuevoNombre}" en todos los productos?`, async () => {
+            // Actualizar la marca en todos los productos que la usan
+            const { error } = await _supabase
+                .from('productos')
+                .update({ marca: nuevoNombre })
+                .eq('marca', nombreAntiguo);
+
+            if (error) {
+                showToast(`Error al actualizar productos: ${error.message}`, 'error');
+                return;
+            }
+
+            document.getElementById('marcaNombre').value = '';
+            document.getElementById('marcaId').value = '';
+            marcaSeleccionadaId = null;
+            await cargarMarcas(); // Recargar la lista de marcas desde los productos
+            await loadExistingBrands(); // Actualizar el campo de marca en el formulario de producto
+            socket.emit('cambio-dato', { type: 'products' }); // Notificar a otros clientes
+            showToast('Marca actualizada en todos los productos.', 'success');
+        });
+    });
+
+    document.getElementById('btnEliminarMarca').addEventListener('click', async () => {
+        const nombreMarca = document.getElementById('marcaId').value; // El ID es el nombre
+        if (!nombreMarca) {
+            showToast('Selecciona una marca para eliminar.', 'error');
+            return;
+        }
+
+        showConfirmation(`¿Eliminar la marca "${nombreMarca}"? Los productos asociados quedarán sin marca.`, async () => {
+            // Actualizar los productos para quitarles la marca
+            const { error } = await _supabase
+                .from('productos')
+                .update({ marca: '' }) // O null, dependiendo del diseño de la DB
+                .eq('marca', nombreMarca);
+
+            if (error) {
+                showToast(`Error al eliminar marca de los productos: ${error.message}`, 'error');
+                return;
+            }
+
+            document.getElementById('marcaNombre').value = '';
+            document.getElementById('marcaId').value = '';
+            marcaSeleccionadaId = null;
+            await cargarMarcas();
+            await loadExistingBrands();
+            socket.emit('cambio-dato', { type: 'products' });
+            showToast('Marca eliminada de los productos.', 'success');
+        });
+    });
+}
+// --- FIN: Funciones para Gestionar Marcas ---
+
+/**
+ * Transforma el select de marca en un input con datalist y añade el botón "Gestionar".
+ */
+async function setupProductModal() {
+    const prodMarcaSelect = document.getElementById('prodMarca');
+    if (!prodMarcaSelect) return;
+
+    const marcaFieldGroup = prodMarcaSelect.closest('.field-group');
+    if (!marcaFieldGroup) return;
+
+    // Si el wrapper con el botón ya existe, no hacer nada.
+    if (marcaFieldGroup.querySelector('.field-group-horizontal')) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'field-group-horizontal';
+
+    // Mover el select existente dentro del wrapper para preservar listeners
+    prodMarcaSelect.parentNode.insertBefore(wrapper, prodMarcaSelect);
+    wrapper.appendChild(prodMarcaSelect);
+
+    const gestionarBtn = document.createElement('button');
+    gestionarBtn.id = 'btnGestionarMarcas';
+    gestionarBtn.type = 'button';
+    gestionarBtn.className = 'action-btn btn-blue';
+    gestionarBtn.textContent = 'Gestionar';
+    gestionarBtn.onclick = () => { initModalMarcas(); document.getElementById('modalMarca').classList.add('active'); };
+
+    wrapper.appendChild(gestionarBtn);
+}
+
 // Modal Producto
 async function initModalProducto() {
-    await actualizarSelectProductos();
-    
-    // Resetear a modo manual cada vez que se abre el modal
+    // Preparar la estructura del modal (botón "Gestionar") antes de cargar opciones
+    await setupProductModal();
+    // Cargar ambas listas desplegables en paralelo para mayor rapidez
+    await Promise.all([actualizarSelectProductos(), loadExistingBrands()]);
+
     const form = document.getElementById('formProducto');
+
     form.closest('.modal').querySelector('h3').textContent = 'Cargar Nuevo Producto';
-    
+
+    // Resetear el campo de marca y el input para nueva marca (solo para nuevo producto)
+    document.getElementById('prodMarca').value = ''; // Resetear la selección de marca
+
     document.getElementById('prodEditCodigo').value = ''; // Limpiar el código de edición
     document.getElementById('prodCodigo').readOnly = false; // Allow editing code for new products
 
@@ -3012,6 +3218,84 @@ async function initModalProducto() {
     if (form) {
         setProductModalMode('manual');
         form.reset(); // Limpiar el formulario
+    }
+}
+
+/**
+ * Carga las marcas directamente desde la tabla de productos.
+ * @param {string} filtro - Texto para filtrar la lista renderizada.
+ */
+async function cargarMarcas(filtro = '') {
+    try {
+        // Paso 1: Obtener todas las marcas únicas directamente de la tabla de productos.
+        const { data, error } = await _supabase
+            .from('productos')
+            .select('marca');
+
+        if (error) {
+            throw new Error(`Error al leer marcas de productos: ${error.message}`);
+        }
+
+        // Paso 2: Procesar los datos para crear una lista única y formateada.
+        const marcasUnicas = [...new Set((data || []).map(p => p.marca).filter(m => m && m.trim() !== ''))];
+        marcasCache = marcasUnicas.sort((a, b) => a.localeCompare(b)).map(nombre => ({
+            id: nombre, // Usamos el nombre como ID
+            nombre: nombre
+        }));
+    } catch (err) {
+        console.error("Error en la función cargarMarcas:", err);
+        showToast(err.message, 'error');
+        marcasCache = []; // En caso de error, vaciar el caché.
+    }
+
+    renderizarListaMarcas(filtro);
+}
+
+function renderizarListaMarcas(filtro = '') {
+    const lista = document.getElementById('listaMarcas');
+    if (!lista) return;
+    lista.innerHTML = '';
+    const marcasFiltradas = marcasCache.filter(m => m.nombre.toLowerCase().includes(filtro.toLowerCase()));
+
+    if (marcasFiltradas.length === 0) {
+        lista.innerHTML = '<li style="color: var(--text-muted); text-align: center; padding: 10px;">No hay marcas para mostrar.</li>';
+        return;
+    }
+
+    marcasFiltradas.forEach(m => {
+        const li = document.createElement('li');
+        li.className = `cat-item ${marcaSeleccionadaId === m.id ? 'selected' : ''}`;
+        li.textContent = m.nombre;
+        li.onclick = () => {
+            document.querySelectorAll('#listaMarcas .cat-item').forEach(el => el.classList.remove('selected'));
+            li.classList.add('selected');
+            marcaSeleccionadaId = m.id;
+            document.getElementById('marcaNombre').value = m.nombre;
+            document.getElementById('marcaId').value = m.id;
+        };
+        lista.appendChild(li);
+    });
+}
+
+/**
+ * Carga las marcas existentes y las popula en el datalist del formulario de producto.
+ */
+async function loadExistingBrands() {
+    const select = document.getElementById('prodMarca');
+    if (!select || select.tagName !== 'SELECT') return;
+
+    const previouslySelectedValue = select.value;
+    select.innerHTML = '<option value="">-- Sin Marca --</option>';
+
+    // `cargarMarcas` obtiene las marcas únicas de la tabla 'productos'
+    await cargarMarcas();
+
+    if (marcasCache && marcasCache.length > 0) {
+        marcasCache.forEach(brand => {
+            select.add(new Option(brand.nombre, brand.nombre));
+        });
+        // Restaurar el valor seleccionado previamente si todavía existe en la lista
+        select.value = previouslySelectedValue;
     }
 }
 
@@ -3049,6 +3333,31 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.href = '/';
         });
     }
+
+    // --- INICIO: HTML para el nuevo modal de marcas ---
+    const modalMarcaHtml = `
+    <div class="modal-overlay" id="modalMarca" data-modal-close>
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3>Gestionar Marcas</h3>
+                <button id="closeModalMarcaBtn" class="action-btn btn-del">&times;</button>
+            </div>
+            <div class="modal-form">
+                <div class="field-group">
+                    <label for="marcaNombre">Nombre de la Marca</label>
+                    <input type="text" id="marcaNombre" placeholder="Ej: Total Repuestos"><input type="hidden" id="marcaId">
+                </div>
+                <div class="field-group">
+                    <label for="marcaBuscar">Buscar Marca</label>
+                    <input type="text" id="marcaBuscar" placeholder="Filtrar marcas...">
+                </div>
+                <ul id="listaMarcas" class="cat-list"></ul>
+                <div class="modal-buttons"><button id="btnAgregarMarca" class="action-btn btn-green">Agregar</button><button id="btnEditarMarca" class="action-btn btn-edit">Editar</button><button id="btnEliminarMarca" class="action-btn btn-del">Eliminar</button></div>
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', modalMarcaHtml);
+    // --- FIN: HTML para el nuevo modal de marcas ---
 
     // --- LÓGICA DE LA BARRA LATERAL RESPONSIVA ---
     const sidebarOverlay = document.getElementById('content-overlay');
@@ -3107,10 +3416,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 cantidadFinal = parseInt(document.getElementById('prodCantidad').value, 10);
             }
 
+            const marcaFinal = document.getElementById('prodMarca').value;
+
             const productData = {
                 categoria: document.getElementById('prodCategoria').value,
                 nombre: document.getElementById('prodNombre').value,
-                marca: document.getElementById('prodMarca').value.trim(),
+                marca: marcaFinal,
                 ubicacion: document.getElementById('prodUbicacion').value.trim(),
                 cantidad: cantidadFinal,
                 precio_costo_dolares_bcv: precioCostoDolaresBcv,
