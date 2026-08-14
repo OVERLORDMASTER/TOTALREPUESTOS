@@ -156,23 +156,26 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     const iframe = document.createElement('iframe');
 
     return new Promise((resolve, reject) => {
-        
         iframe.style.position = 'fixed';
         iframe.style.width = '0';
         iframe.style.height = '0';
         iframe.style.border = 'none';
 
         iframe.onload = function() {
+            // Envolver la lógica de impresión en un bloque try/finally
+            // para asegurar la limpieza del iframe.
             try {
                 iframe.contentWindow.focus();
                 iframe.contentWindow.print();
                 showToast('Se ha abierto el diálogo de impresión.', 'success');
                 resolve();
             } catch (e) {
-                console.error('Error al intentar imprimir:', e);
-                showToast('Error al abrir el diálogo de impresión.', 'error');
+                console.error('Error durante el proceso de impresión:', e);
+                showToast('No se pudo abrir el diálogo de impresión.', 'error');
                 reject(e);
             } finally {
+                // Eliminar el iframe después de un breve retraso para permitir
+                // que el diálogo de impresión se procese correctamente.
                 setTimeout(() => {
                     if (iframe.parentElement) {
                         document.body.removeChild(iframe);

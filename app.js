@@ -319,21 +319,18 @@ async function loadProducts() {
     container.innerHTML = '<p style="color: var(--text-muted); padding: 20px;">Cargando productos...</p>';
     await obtenerTasas();
     try {
-        const resp = await _supabase.from('productos').select('*').order('nombre');
-        const products = resp.data;
-        const error = resp.error;
+        const { data: products, error } = await _supabase.from('productos').select('*').order('nombre');
+        
         if (error) {
             console.error('Supabase error loading productos:', error);
             container.innerHTML = `<p style="color: var(--btn-red);">Error cargando productos: ${error.message || JSON.stringify(error)}</p>`;
+            productosCache = []; // Ensure cache is empty on error
             return;
         }
-        if (!products) {
-            console.warn('Supabase returned no data for productos:', resp);
-            container.innerHTML = `<p style="color: var(--btn-red);">No se recibieron productos. Respuesta: ${JSON.stringify(resp)}</p>`;
-            productosCache = [];
-            return;
-        }
+
+        // The data will be an array, even if it's empty. No need for a !products check.
         productosCache = products || [];
+
     } catch (err) {
         console.error('Fatal error loading productos from Supabase:', err);
         container.innerHTML = `<p style="color: var(--btn-red);">Excepción al cargar productos: ${err.message || JSON.stringify(err)}</p>`;
@@ -346,58 +343,44 @@ async function loadProducts() {
 function renderProducts(productsToRender) {
     const container = document.getElementById('productsContainer');
     if (!container) return;
-    container.innerHTML = '';
-    if (productsToRender.length === 0) {
+
+    if (!productsToRender || productsToRender.length === 0) {
         container.innerHTML = '<p style="color: var(--text-muted); padding: 20px;">No se encontraron productos.</p>';
-    }
-
-    const grouped = {};
-    productsToRender.forEach(p => {
-        const cat = p.categoria && p.categoria.trim() !== '' ? p.categoria : 'Sin Categoría';
-        if (!grouped[cat]) grouped[cat] = [];
-        grouped[cat].push(p);
-    });
-
-    for (const [categoria, prods] of Object.entries(grouped)) {
-        const categoryBox = document.createElement('div');
-        categoryBox.className = 'category-box';
-        const titleEl = document.createElement('h3');
-        titleEl.className = 'category-box-title';
-        titleEl.textContent = categoria;
-        categoryBox.appendChild(titleEl);
-        const gridEl = document.createElement('div');
-        gridEl.className = 'products-grid';
-
-        prods.forEach(p => {
-            const precioVentaBsBcv = formatCurrency(p.precio_venta_dolares_bcv * oficialRate);
-            const precioCostoBsBcv = formatCurrency(p.precio_costo_dolares_bcv * oficialRate);
-            const card = document.createElement('div');
-            card.className = 'product-card';
-            card.dataset.codigo = p.codigo;
-            card.innerHTML = `
-                <div class="field-group"><label>código</label><div class="product-card-value">${p.codigo}</div></div>
-                <div class="field-group"><label>nombre</label><div class="product-card-value">${p.nombre}</div></div>
-                <div class="field-group"><label>marca</label><div class="product-card-value">${p.marca || ''}</div></div>
-                <div class="field-group"><label>ubicación</label><div class="product-card-value">${p.ubicacion || ''}</div></div>
-                <div class="field-group"><label>cantidad</label><div class="product-card-value">${formatInteger(p.cantidad)}</div></div>
-                                <div class="field-group"><label>precio $ en efectivo</label><div class="product-card-value" style="color: var(--btn-green); font-weight: bold;">${formatCurrency(p.precio_usdt)}</div></div>
-                <div class="field-group"><label>precio venta $ bcv</label><div class="product-card-value" style="color: var(--btn-green); font-weight: bold;">${formatCurrency(p.precio_venta_dolares_bcv)}</div></div>
-                <div class="field-group"><label>precio venta bs (bcv)</label><div class="product-card-value" style="color: var(--text-primary); font-weight: bold;">${precioVentaBsBcv}</div></div>
-                <div class="field-group"><label>precio costo $ bcv</label><div class="product-card-value" style="color: var(--btn-green); font-weight: bold;">${formatCurrency(p.precio_costo_dolares_bcv)}</div></div>
-                <div class="field-group"><label>precio costo bs (bcv)</label><div class="product-card-value" style="color: var(--text-primary); font-weight: bold;">${precioCostoBsBcv}</div></div>`;
-
-            card.addEventListener('click', () => {
-                if (modoEdicion) return;
-                document.querySelectorAll('.product-card').forEach(c => c.classList.remove('selected'));
-                card.classList.add('selected');
-                productoSeleccionado = p;
-            });
-            gridEl.appendChild(card);
+    } else {
+        const grouped = {};
+        productsToRender.forEach(p => {
+            const cat = p.categoria && p.categoria.trim() !== '' ? p.categoria : 'Sin Categoría';
+            if (!grouped[cat]) grouped[cat] = [];
+            grouped[cat].push(p);
         });
-        categoryBox.appendChild(gridEl);
-        container.appendChild(categoryBox);
-    }
 
+        const finalHtml = Object.entries(grouped).map(([categoria, prods]) => {
+            const prodsHtml = prods.map(p => {
+                const precioVentaBsBcv = formatCurrency(p.precio_venta_dolares_bcv * oficialRate);
+                const precioCostoBsBcv = formatCurrency(p.precio_costo_dolares_bcv * oficialRate);
+                return `
+                    <div class="product-card" data-codigo="${p.codigo}">
+                        <div class="field-group"><label>código</label><div class="product-card-value">${p.codigo}</div></div>
+                        <div class="field-group"><label>nombre</label><div class="product-card-value">${p.nombre}</div></div>
+                        <div class="field-group"><label>marca</label><div class="product-card-value">${p.marca || ''}</div></div>
+                        <div class="field-group"><label>ubicación</label><div class="product-card-value">${p.ubicacion || ''}</div></div>
+                        <div class="field-group"><label>cantidad</label><div class="product-card-value">${formatInteger(p.cantidad)}</div></div>
+                        <div class="field-group"><label>precio costo $ bcv</label><div class="product-card-value" style="color: var(--btn-green); font-weight: bold;">${formatCurrency(p.precio_costo_dolares_bcv)}</div></div>
+                        <div class="field-group"><label>precio venta $ bcv</label><div class="product-card-value" style="color: var(--btn-green); font-weight: bold;">${formatCurrency(p.precio_venta_dolares_bcv)}</div></div>
+                        <div class="field-group"><label>costo $ efectivo</label><div class="product-card-value" style="color: var(--btn-orange); font-weight: bold;">${formatCurrency(p.costo_$_efectivo)}</div></div>
+                        <div class="field-group"><label>venta $ efectivo</label><div class="product-card-value" style="color: var(--btn-orange); font-weight: bold;">${formatCurrency(p.venta_$_efectivo)}</div></div>
+                        <div class="field-group"><label>precio costo bs (bcv)</label><div class="product-card-value" style="color: var(--text-primary); font-weight: bold;">${precioCostoBsBcv}</div></div>
+                        <div class="field-group"><label>precio venta bs (bcv)</label><div class="product-card-value" style="color: var(--text-primary); font-weight: bold;">${precioVentaBsBcv}</div></div>
+                    </div>`;
+            }).join('');
+            return `
+                <div class="category-box">
+                    <h3 class="category-box-title">${categoria}</h3>
+                    <div class="products-grid">${prodsHtml}</div>
+                </div>`;
+        }).join('');
+        container.innerHTML = finalHtml;
+    }
     let totalInvertido = 0, stockTotal = 0;
     productosCache.forEach(p => {
         totalInvertido += p.cantidad * p.precio_costo_dolares_bcv;
@@ -463,8 +446,9 @@ async function handleEditarProducto() {
     } else { // modo 'manual'
         // Poblar campos de precios manuales
         document.getElementById('prodCostoDolaresBcv').value = productoSeleccionado.precio_costo_dolares_bcv;
+        document.getElementById('prodCostoDolaresEfectivo').value = productoSeleccionado.costo_$_efectivo;
         document.getElementById('prodVentaDolaresBcv').value = productoSeleccionado.precio_venta_dolares_bcv;
-        document.getElementById('prodUsdt').value = productoSeleccionado.precio_usdt;
+        document.getElementById('prodUsdt').value = productoSeleccionado.venta_$_efectivo;
     }
 
     // Finalmente, mostrar el modal
@@ -552,8 +536,8 @@ async function initCajaData() {
 function renderCajaProductos(productsToRender) {
     const container = document.getElementById('cajaProductosDisponibles');
     if (!container) return;
-    container.innerHTML = '';
-    if (productsToRender.length === 0) { 
+
+    if (!productsToRender || productsToRender.length === 0) { 
         container.innerHTML = '<p style="color: var(--text-muted); padding: 10px;">No se encontraron productos.</p>'; 
         return; 
     }
@@ -566,60 +550,58 @@ function renderCajaProductos(productsToRender) {
         grouped[cat].push(p);
     });
 
-    for (const [categoria, prods] of Object.entries(grouped)) {
-        const categoryBox = document.createElement('div');
-        categoryBox.className = 'caja-category-box'; // Nueva clase para la caja de categoría en caja
-        const titleEl = document.createElement('h3');
-        titleEl.className = 'caja-category-box-title'; // Nueva clase para el título de categoría en caja
-        titleEl.textContent = categoria;
-        categoryBox.appendChild(titleEl);
-
-        const productsGrid = document.createElement('div');
-        productsGrid.className = 'caja-products-grid'; // Nueva clase para la cuadrícula de productos dentro de una categoría en caja
-
-        prods.forEach(p => {
+    const finalHtml = Object.entries(grouped).map(([categoria, prods]) => {
+        const prodsHtml = prods.map(p => {
             const precioVentaBsBcv = formatCurrency(p.precio_venta_dolares_bcv * oficialRate);
             const precioVentaDolares = formatCurrency(p.precio_venta_dolares_bcv);
-            const card = document.createElement('div');
-            card.className = 'product-card-caja-vertical'; // Clase existente para la tarjeta vertical
-            card.innerHTML = `
-                <div class="caja-v-item">
-                    <label>Código</label>
-                    <span>${p.codigo}</span>
-                </div>
-                <div class="caja-v-item">
-                    <label>Nombre</label>
-                    <span>${p.nombre}</span>
-                </div>
-                <div class="caja-v-item">
-                    <label>Precio Bs (BCV)</label>
-                    <span style="color: var(--text-primary); font-weight: bold;">${precioVentaBsBcv}</span>
-                </div>
-                <div class="caja-v-item">
-                    <label>Precio Dólares (BCV)</label>
-                    <span style="color: var(--btn-green); font-weight: bold;">${precioVentaDolares}</span>
-                </div>
-                <div class="caja-v-item">
-                    <label>Stock Disponible</label>
-                    <span>${p.cantidad}</span>
-                </div>
-                <div class="caja-v-actions">
-                    <label>Cantidad a llevar</label>
-                    <div class="caja-v-action-group">
-                        <div class="quantity-control">
-                            <button type="button" class="quantity-btn minus" data-codigo="${p.codigo}">-</button>
-                            <input type="number" class="caja-input-cant" id="cant_${p.codigo}" value="1" min="1" max="${p.cantidad}">
-                            <button type="button" class="quantity-btn plus" data-codigo="${p.codigo}">+</button>
-                        </div>
-                        <button class="action-btn btn-add" data-codigo="${p.codigo}">Agregar</button>
+            return `
+                <div class="product-card-caja-vertical">
+                    <div class="caja-v-item">
+                        <label>Código</label>
+                        <span>${p.codigo}</span>
                     </div>
-                </div>
-            `;
-            productsGrid.appendChild(card);
-        });
-        categoryBox.appendChild(productsGrid);
-        container.appendChild(categoryBox);
-    };
+                    <div class="caja-v-item">
+                        <label>Nombre</label>
+                        <span>${p.nombre}</span>
+                    </div>
+                    <div class="caja-v-item">
+                        <label>Precio Bs (BCV)</label>
+                        <span style="color: var(--text-primary); font-weight: bold;">${precioVentaBsBcv}</span>
+                    </div>
+                    <div class="caja-v-item">
+                        <label>Precio Dólares (BCV)</label>
+                        <span style="color: var(--btn-green); font-weight: bold;">${precioVentaDolares}</span>
+                    </div>
+                    <div class="caja-v-item">
+                        <label>Precio en Efectivo</label>
+                        <span style="color: var(--btn-orange); font-weight: bold;">${formatCurrency(p.venta_$_efectivo)}</span>
+                    </div>
+                    <div class="caja-v-item">
+                        <label>Stock Disponible</label>
+                        <span>${p.cantidad}</span>
+                    </div>
+                    <div class="caja-v-actions">
+                        <label>Cantidad a llevar</label>
+                        <div class="caja-v-action-group">
+                            <div class="quantity-control">
+                                <button type="button" class="quantity-btn minus" data-codigo="${p.codigo}">-</button>
+                                <input type="number" class="caja-input-cant" id="cant_${p.codigo}" value="1" min="1" max="${p.cantidad}">
+                                <button type="button" class="quantity-btn plus" data-codigo="${p.codigo}">+</button>
+                            </div>
+                            <button class="action-btn btn-add" data-codigo="${p.codigo}">Agregar</button>
+                        </div>
+                    </div>
+                </div>`;
+        }).join('');
+
+        return `
+            <div class="caja-category-box">
+                <h3 class="caja-category-box-title">${categoria}</h3>
+                <div class="caja-products-grid">${prodsHtml}</div>
+            </div>`;
+    }).join('');
+
+    container.innerHTML = finalHtml;
 }
 
 function agregarAParaLlevar(codigo) {
@@ -662,23 +644,28 @@ function renderizarParaLlevar() {
     let totalArticulos = 0, totalBcv = 0;
     productosParaLlevar.forEach(item => {
         // CORRECCIÓN: Usar precio_venta_dolares_bcv en lugar de precio_usdt
-        const subtotalUSD = item.precio_venta_dolares_bcv * item.cantidadLlevar;
-        const subtotalBS = formatCurrency(subtotalUSD * oficialRate); // Usar tasa oficial para consistencia visual
+        const subtotalDolaresBcv = item.precio_venta_dolares_bcv * item.cantidadLlevar;
+        const subtotalDolaresEfectivo = item.venta_$_efectivo * item.cantidadLlevar;
+        const subtotalBolivares = formatCurrency(subtotalDolaresBcv * oficialRate); // Usar tasa oficial para consistencia visual
 
         totalArticulos += item.cantidadLlevar;
-        totalBcv += subtotalUSD;
+        totalBcv += subtotalDolaresBcv;
         const card = document.createElement('div');
         card.className = 'product-card-caja-list'; // Usar la misma clase de lista
         card.innerHTML = `
             <div class="caja-list-info">
                 <span class="caja-list-nombre">${item.nombre}</span>
                 <div class="caja-v-item">
-                    <label>Subtotal Bs</label>
-                    <span style="color: var(--text-primary); font-weight: bold;">${subtotalBS}</span>
+                    <label>Subtotal Dólares BCV</label>
+                    <span style="color: var(--btn-green); font-weight: bold;">${formatCurrency(subtotalDolaresBcv)}</span>
                 </div>
                 <div class="caja-v-item">
-                    <label>Subtotal $</label>
-                    <span style="color: var(--btn-green); font-weight: bold;">${formatCurrency(subtotalUSD)}</span>
+                    <label>Subtotal Bolívares</label>
+                    <span style="color: var(--text-primary); font-weight: bold;">${subtotalBolivares}</span>
+                </div>
+                <div class="caja-v-item">
+                    <label>Subtotal Dólares en Efectivo</label>
+                    <span style="color: var(--btn-orange); font-weight: bold;">${formatCurrency(subtotalDolaresEfectivo)}</span>
                 </div>
             </div>
             <div class="caja-list-actions">
@@ -881,7 +868,7 @@ function renderizarTablaVentas(listaVentas) {
                 </thead>
                 <tbody></tbody>`;
             const tbody = table.querySelector('tbody');
-
+            let rowsHtml = []; // Array para almacenar las cadenas HTML de las filas
             ventasDelDia.forEach(v => {
                 const horaFormateada = new Date(v.fecha).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
                 const detallesAgrupados = {};
@@ -941,11 +928,10 @@ function renderizarTablaVentas(listaVentas) {
                 if (v.estado_pago === 'pendiente') {
                     accionesHtml += `<button class="action-btn btn-blue btn-abonar-venta venta-accion-btn" data-venta-id="${v.id}">Abonar</button>`;
                 }
-                accionesHtml += `<button class="btn-edit-venta venta-accion-btn" data-venta-id="${v.id}">Editar</button><button class="action-btn btn-del btn-delete-venta venta-accion-btn" data-venta-id="${v.id}">Eliminar</button>`;
-                tr.innerHTML += `<td class="venta-acciones">${accionesHtml}</td>`;
-                tbody.appendChild(tr);
+                accionesHtml += `<button class="btn-edit-venta venta-accion-btn" data-venta-id="${v.id}">Editar</button><button class="action-btn btn-del btn-delete-venta venta-accion-btn" data-venta-id="${v.id}">Eliminar</button>`;                
+                rowsHtml.push(`<tr>${tr.innerHTML}<td class="venta-acciones">${accionesHtml}</td></tr>`);
             });
-
+            tbody.innerHTML = rowsHtml.join(''); // Asignar todas las filas de una vez
             dayContent.appendChild(table);
             dayGroup.appendChild(dayHeader);
             dayGroup.appendChild(dayContent);
@@ -975,17 +961,18 @@ async function _deleteSaleAndRestoreStock(ventaParaEliminar) {
             .single();
 
         if (fetchError) {
-            throw new Error(`No se pudo encontrar el producto ${detalle.producto_codigo} para restaurar stock.`);
-        }
+            // Si el producto ya no existe, no podemos restaurar stock, pero podemos continuar eliminando la venta.
+            console.warn(`Producto con código ${detalle.producto_codigo} no encontrado. No se restaurará stock para este item.`);
+        } else {
+            const nuevoStock = productoActual.cantidad + detalle.cantidad;
+            const { error: updateError } = await _supabase
+                .from('productos')
+                .update({ cantidad: nuevoStock })
+                .eq('codigo', detalle.producto_codigo);
 
-        const nuevoStock = productoActual.cantidad + detalle.cantidad;
-        const { error: updateError } = await _supabase
-            .from('productos')
-            .update({ cantidad: nuevoStock })
-            .eq('codigo', detalle.producto_codigo);
-
-        if (updateError) {
-            throw new Error(`Fallo al actualizar el stock para ${detalle.producto_codigo}.`);
+            if (updateError) {
+                throw new Error(`Fallo al actualizar el stock para ${detalle.producto_codigo}.`);
+            }
         }
     }
 
@@ -2386,6 +2373,24 @@ function cargarAjustesTasa() {
 // Delegación de eventos para elementos cargados dinámicamente
 document.addEventListener('click', (e) => {
     // Modales
+    // --- INICIO: Delegación de eventos para seleccionar productos en Inventario ---
+    const productCard = e.target.closest('.products-grid .product-card');
+    if (productCard) {
+        const vistaActiva = document.querySelector('.nav-btn.active')?.textContent.trim().toLowerCase();
+        if (vistaActiva === 'inventario de productos') {
+            if (modoEdicion) return;
+            
+            // Deseleccionar el anterior
+            const selectedCard = document.querySelector('.product-card.selected');
+            if (selectedCard) selectedCard.classList.remove('selected');
+            
+            // Seleccionar el nuevo
+            productCard.classList.add('selected');
+            const pCodigo = productCard.dataset.codigo;
+            productoSeleccionado = productosCache.find(p => p.codigo === pCodigo);
+        }
+    }
+    // --- FIN: Delegación de eventos para seleccionar productos en Inventario ---
     if (e.target.matches('[data-modal-target]')) {
         const modalId = e.target.dataset.modalTarget;
         const modal = document.getElementById(modalId);
@@ -3079,20 +3084,40 @@ async function initModalMarcas() {
             return;
         }
 
-        // Agregar la nueva marca solo al caché local
-        marcasCache.push({ id: nombre, nombre: nombre });
-        marcasCache.sort((a, b) => a.nombre.localeCompare(b.nombre)); // Mantener el orden
+        // Persistir la marca en localStorage (usamos la tabla 'productos' como fuente primaria)
+        try {
+            const localKey = 'marcas_local_v1';
+            const stored = JSON.parse(localStorage.getItem(localKey) || '[]');
+            const newLocal = { id: 'local-' + Date.now(), nombre };
+            stored.push(newLocal);
+            localStorage.setItem(localKey, JSON.stringify(stored));
+            marcasCache.push(newLocal);
+        } catch (err) {
+            console.warn('Error al guardar marca en localStorage:', err);
+            marcasCache.push({ id: 'local-' + Date.now(), nombre });
+        }
 
+        marcasCache.sort((a, b) => a.nombre.localeCompare(b.nombre));
         document.getElementById('marcaNombre').value = '';
-        
-        // Actualizar la UI
-        renderizarListaMarcas(); // Actualiza la lista en el modal de gestión
-        await loadExistingBrands(); // Actualiza el <select> en el modal de producto
-        showToast('Marca agregada a la lista. Se guardará al usarla.', 'success');
+
+        // Actualizar la UI de la lista de gestión
+        renderizarListaMarcas();
+
+        // Actualizar el <select> en el modal de producto directamente desde el caché actualizado
+        const select = document.getElementById('prodMarca');
+        if (select) {
+            const previouslySelectedValue = select.value;
+            select.innerHTML = '<option value="">-- Sin Marca --</option>';
+            marcasCache.forEach(brand => select.add(new Option(brand.nombre, brand.nombre)));
+            select.value = previouslySelectedValue;
+        }
+
+        socket.emit('cambio-dato', { type: 'brands' });
+        showToast('Marca agregada.', 'success');
     });
 
     document.getElementById('btnEditarMarca').addEventListener('click', async () => {
-        const nombreAntiguo = document.getElementById('marcaId').value; // El ID ahora es el nombre antiguo
+        const nombreAntiguo = document.getElementById('marcaId').value; // Puede ser id o nombre
         const nuevoNombre = document.getElementById('marcaNombre').value.trim();
 
         if (!nombreAntiguo) {
@@ -3103,55 +3128,107 @@ async function initModalMarcas() {
             showToast('Ingresa un nombre nuevo y diferente.', 'error');
             return;
         }
-        
+
         showConfirmation(`¿Cambiar la marca "${nombreAntiguo}" a "${nuevoNombre}" en todos los productos?`, async () => {
             // Actualizar la marca en todos los productos que la usan
-            const { error } = await _supabase
+            const { error: prodError } = await _supabase
                 .from('productos')
                 .update({ marca: nuevoNombre })
                 .eq('marca', nombreAntiguo);
 
-            if (error) {
-                showToast(`Error al actualizar productos: ${error.message}`, 'error');
+            if (prodError) {
+                showToast(`Error al actualizar productos: ${prodError.message}`, 'error');
                 return;
             }
 
+            // Actualizar marcas guardadas en localStorage (si las hay)
+            try {
+                const localKey = 'marcas_local_v1';
+                const stored = JSON.parse(localStorage.getItem(localKey) || '[]');
+                const idx = stored.findIndex(s => s.nombre === nombreAntiguo || String(s.id) === String(nombreAntiguo));
+                if (idx !== -1) {
+                    stored[idx].nombre = nuevoNombre;
+                    localStorage.setItem(localKey, JSON.stringify(stored));
+                }
+            } catch (e) {
+                console.warn('No se pudo actualizar marca en localStorage:', e);
+            }
+
+            // Actualizar el caché localmente
+            const oldBrandIndex = marcasCache.findIndex(m => m.nombre.toLowerCase() === nombreAntiguo.toLowerCase());
+            if (oldBrandIndex !== -1) {
+                const newNameExists = marcasCache.some(m => m.nombre.toLowerCase() === nuevoNombre.toLowerCase() && m.nombre.toLowerCase() !== nombreAntiguo.toLowerCase());
+                if (newNameExists) {
+                    marcasCache.splice(oldBrandIndex, 1);
+                } else {
+                    marcasCache[oldBrandIndex].nombre = nuevoNombre;
+                }
+            }
+
+            marcasCache.sort((a, b) => a.nombre.localeCompare(b.nombre));
             document.getElementById('marcaNombre').value = '';
             document.getElementById('marcaId').value = '';
             marcaSeleccionadaId = null;
-            await cargarMarcas(); // Recargar la lista de marcas desde los productos
-            await loadExistingBrands(); // Actualizar el campo de marca en el formulario de producto
-            socket.emit('cambio-dato', { type: 'products' }); // Notificar a otros clientes
-            showToast('Marca actualizada en todos los productos.', 'success');
+
+            // Actualizar las UIs desde el caché modificado
+            renderizarListaMarcas();
+            const select = document.getElementById('prodMarca');
+            if (select) {
+                const previouslySelectedValue = select.value === nombreAntiguo ? nuevoNombre : select.value;
+                select.innerHTML = '<option value="">-- Sin Marca --</option>';
+                marcasCache.forEach(brand => select.add(new Option(brand.nombre, brand.nombre)));
+                select.value = previouslySelectedValue;
+            }
+
+            socket.emit('cambio-dato', { type: 'brands' });
+            showToast('Marca actualizada.', 'success');
         });
     });
 
     document.getElementById('btnEliminarMarca').addEventListener('click', async () => {
-        const nombreMarca = document.getElementById('marcaId').value; // El ID es el nombre
-        if (!nombreMarca) {
+        const marcaIdOrName = document.getElementById('marcaId').value; // Puede ser id o nombre
+        if (!marcaIdOrName) {
             showToast('Selecciona una marca para eliminar.', 'error');
             return;
         }
 
-        showConfirmation(`¿Eliminar la marca "${nombreMarca}"? Los productos asociados quedarán sin marca.`, async () => {
+        showConfirmation(`¿Eliminar la marca "${marcaIdOrName}"? Los productos asociados quedarán sin marca.`, async () => {
             // Actualizar los productos para quitarles la marca
-            const { error } = await _supabase
+            const { error: prodError } = await _supabase
                 .from('productos')
                 .update({ marca: '' }) // O null, dependiendo del diseño de la DB
-                .eq('marca', nombreMarca);
+                .eq('marca', marcaIdOrName);
 
-            if (error) {
-                showToast(`Error al eliminar marca de los productos: ${error.message}`, 'error');
+            if (prodError) {
+                showToast(`Error al eliminar marca de los productos: ${prodError.message}`, 'error');
                 return;
+            }
+
+            // Eliminar de localStorage (si existe) y del caché
+            try {
+                const localKey = 'marcas_local_v1';
+                const stored = JSON.parse(localStorage.getItem(localKey) || '[]');
+                const filtered = stored.filter(s => !(s.nombre === marcaIdOrName || String(s.id) === String(marcaIdOrName)));
+                localStorage.setItem(localKey, JSON.stringify(filtered));
+            } catch (e) {
+                console.warn('No se pudo actualizar localStorage al eliminar marca:', e);
+            }
+            marcasCache = marcasCache.filter(m => !(m.nombre === marcaIdOrName || String(m.id) === String(marcaIdOrName)));
+            renderizarListaMarcas();
+            const select = document.getElementById('prodMarca');
+            if (select) {
+                const prev = select.value;
+                select.innerHTML = '<option value="">-- Sin Marca --</option>';
+                marcasCache.forEach(brand => select.add(new Option(brand.nombre, brand.nombre)));
+                select.value = prev;
             }
 
             document.getElementById('marcaNombre').value = '';
             document.getElementById('marcaId').value = '';
             marcaSeleccionadaId = null;
-            await cargarMarcas();
             await loadExistingBrands();
-            socket.emit('cambio-dato', { type: 'products' });
-            showToast('Marca eliminada de los productos.', 'success');
+            socket.emit('cambio-dato', { type: 'brands' });
+            showToast('Marca eliminada.', 'success');
         });
     });
 }
@@ -3227,7 +3304,7 @@ async function initModalProducto() {
  */
 async function cargarMarcas(filtro = '') {
     try {
-        // Paso 1: Obtener todas las marcas únicas directamente de la tabla de productos.
+        // Obtener marcas únicas desde la tabla de productos
         const { data, error } = await _supabase
             .from('productos')
             .select('marca');
@@ -3236,12 +3313,25 @@ async function cargarMarcas(filtro = '') {
             throw new Error(`Error al leer marcas de productos: ${error.message}`);
         }
 
-        // Paso 2: Procesar los datos para crear una lista única y formateada.
         const marcasUnicas = [...new Set((data || []).map(p => p.marca).filter(m => m && m.trim() !== ''))];
-        marcasCache = marcasUnicas.sort((a, b) => a.localeCompare(b)).map(nombre => ({
-            id: nombre, // Usamos el nombre como ID
-            nombre: nombre
-        }));
+        marcasCache = marcasUnicas.sort((a, b) => a.localeCompare(b)).map(nombre => ({ id: nombre, nombre: nombre }));
+
+        // Merge marcas guardadas en localStorage
+        try {
+            const localKey = 'marcas_local_v1';
+            const localStored = JSON.parse(localStorage.getItem(localKey) || '[]');
+            if (Array.isArray(localStored) && localStored.length > 0) {
+                localStored.forEach(ls => {
+                    if (!marcasCache.some(m => m.nombre.toLowerCase() === ls.nombre.toLowerCase())) {
+                        marcasCache.push({ id: ls.id || ('local-' + Date.now()), nombre: ls.nombre });
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn('Error al leer marcas locales desde localStorage:', e);
+        }
+
+        marcasCache.sort((a, b) => a.nombre.localeCompare(b.nombre));
     } catch (err) {
         console.error("Error en la función cargarMarcas:", err);
         showToast(err.message, 'error');
@@ -3379,7 +3469,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const editCodigo = document.getElementById('prodEditCodigo').value;
             const mode = formProducto.dataset.mode || 'manual';
 
-            let precioCostoDolaresBcv, precioVentaDolaresBcv, precioUsdt;
+            let precioCostoDolaresBcv, precioVentaDolaresBcv, ventaDolaresEfectivo, costoDolaresEfectivo;
             let calc_costo_usdt = null, calc_descuento = null, calc_ganancia = null;
 
             if (mode === 'calculator') {
@@ -3393,16 +3483,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const costoEnBolivares = valorConDescuento * paraleloRate;
                 precioCostoDolaresBcv = costoEnBolivares / oficialRate;
                 precioVentaDolaresBcv = precioCostoDolaresBcv * (1 + (ganancia / 100));
-                precioUsdt = valorConDescuento;
+                ventaDolaresEfectivo = valorConDescuento;
+                costoDolaresEfectivo = costoProductoUsdt; // El costo en efectivo es el costo USDT original
                 calc_costo_usdt = costoProductoUsdt;
                 calc_descuento = descuento;
                 calc_ganancia = ganancia;
             } else { // manual
                 precioCostoDolaresBcv = parseFloat(document.getElementById('prodCostoDolaresBcv').value) || 0;
+                costoDolaresEfectivo = parseFloat(document.getElementById('prodCostoDolaresEfectivo').value) || 0;
                 precioVentaDolaresBcv = parseFloat(document.getElementById('prodVentaDolaresBcv').value) || 0;
-                precioUsdt = parseFloat(document.getElementById('prodUsdt').value) || 0;
-                if (precioVentaDolaresBcv <= 0 || precioCostoDolaresBcv < 0 || precioUsdt <= 0) {
-                    showToast('Todos los precios deben ser mayores a cero.', 'error'); return;
+                ventaDolaresEfectivo = parseFloat(document.getElementById('prodUsdt').value) || 0;
+                if (precioVentaDolaresBcv <= 0 || precioCostoDolaresBcv < 0 || ventaDolaresEfectivo <= 0 || costoDolaresEfectivo < 0) {
+                    showToast('Los precios de venta deben ser mayores a cero y los costos no pueden ser negativos.', 'error'); return;
                 }
             }
 
@@ -3426,7 +3518,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 cantidad: cantidadFinal,
                 precio_costo_dolares_bcv: precioCostoDolaresBcv,
                 precio_venta_dolares_bcv: precioVentaDolaresBcv,
-                precio_usdt: precioUsdt,
+                venta_$_efectivo: ventaDolaresEfectivo,
+                costo_$_efectivo: costoDolaresEfectivo,
                 modo_creacion: mode,
                 calc_costo_usdt: calc_costo_usdt,
                 calc_descuento: calc_descuento,
@@ -3492,8 +3585,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const cantidad = parseInt(document.getElementById('adicCantidad').value, 10);
             const precioVenta = parseFloat(document.getElementById('adicPrecioVenta').value);
     
-            // Usamos el mismo precio para ambas tasas para simplificar
-            productosParaLlevar.push({ nombre, codigo, cantidad: 9999, precio_venta_dolares_bcv: precioVenta, precio_costo_dolares_bcv: precioVenta, precio_usdt: precioVenta, cantidadLlevar: cantidad, esAdicional: true });
+            // Para un producto adicional, el costo y la venta son iguales para simplificar
+            productosParaLlevar.push({ 
+                nombre, 
+                codigo, 
+                cantidad: 9999, 
+                precio_venta_dolares_bcv: precioVenta, 
+                precio_costo_dolares_bcv: precioVenta, 
+                venta_$_efectivo: precioVenta, 
+                costo_$_efectivo: precioVenta,
+                cantidadLlevar: cantidad, 
+                esAdicional: true 
+            });
             
             renderizarParaLlevar();
             document.getElementById('formAdicional').reset();
