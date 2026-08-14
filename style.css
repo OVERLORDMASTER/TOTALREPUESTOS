@@ -561,6 +561,37 @@ header {
     .historial-cliente, .historial-montos {
         text-align: left !important; /* Alinea el texto a la izquierda en móvil */
     }
+
+    /* --- INICIO: Ajustes de compactación para la vista de Caja en móvil --- */
+    .accordion-header {
+        padding: 12px 15px;
+        font-size: 0.95rem; /* Ligeramente más pequeño */
+    }
+
+    .product-card-caja-vertical {
+        padding: 10px;
+        gap: 6px; /* Menos espacio entre elementos */
+    }
+
+    .caja-v-item span {
+        padding: 4px 8px;
+        font-size: 0.8rem;
+    }
+
+    .caja-v-item label {
+        font-size: 0.62rem;
+    }
+
+    .caja-v-actions {
+        margin-top: 4px;
+        padding-top: 6px;
+        gap: 6px;
+    }
+
+    .quantity-btn, .quantity-control .caja-input-cant, .caja-v-actions .action-btn { height: 30px; }
+    .quantity-btn { width: 30px; font-size: 1.2rem; }
+    .quantity-control .caja-input-cant { width: 45px; font-size: 0.9rem; }
+    /* --- FIN: Ajustes de compactación para la vista de Caja en móvil --- */
 }
 
 /* ==========================================================================
