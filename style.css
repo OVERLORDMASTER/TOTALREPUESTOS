@@ -592,6 +592,42 @@ header {
     .quantity-btn { width: 30px; font-size: 1.2rem; }
     .quantity-control .caja-input-cant { width: 45px; font-size: 0.9rem; }
     /* --- FIN: Ajustes de compactación para la vista de Caja en móvil --- */
+
+    /* Compactar tarjetas y paneles para evitar solapamiento con barra de navegación Android */
+    /* Reducir padding y tamaño de fuentes en los contenedores de productos */
+    .product-card, .product-card-caja-list, .product-card-caja-vertical {
+        padding: 8px;
+        gap: 6px;
+    }
+
+    .product-card .field-group input,
+    .product-card .product-card-value,
+    .product-card-caja-list .caja-list-codigo,
+    .caja-v-item span {
+        font-size: 0.78rem; /* Texto más compacto */
+        padding: 6px 8px;
+    }
+
+    /* Encabezados de acordeón más compactos */
+    .accordion-header {
+        padding: 10px 12px;
+        font-size: 0.92rem;
+    }
+
+    /* Reducir altura máxima para dejar espacio para los botones del SO */
+    #cajaProductosDisponibles { max-height: calc(48vh - env(safe-area-inset-bottom)); }
+    #cajaProductosParaLlevar { max-height: calc(40vh - env(safe-area-inset-bottom)); }
+
+    /* Añadir padding inferior para evitar que el contenido quede tapado */
+    #cajaProductosDisponibles, #cajaProductosParaLlevar {
+        padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    }
+
+    /* Ajustes extra para pantallas muy pequeñas */
+    @media (max-height: 700px) {
+        #cajaProductosDisponibles { max-height: calc(44vh - env(safe-area-inset-bottom)); }
+        #cajaProductosParaLlevar { max-height: calc(36vh - env(safe-area-inset-bottom)); }
+    }
 }
 
 /* ==========================================================================
