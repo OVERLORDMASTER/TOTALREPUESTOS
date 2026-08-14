@@ -619,14 +619,14 @@ header {
     #cajaProductosDisponibles { max-height: calc(44vh - env(safe-area-inset-bottom)); }
     #cajaProductosParaLlevar { max-height: calc(34vh - env(safe-area-inset-bottom)); }
 
-    /* Añadir padding inferior para evitar que el contenido quede tapado */
+    /* Añadir padding inferior para evitar que el contenido quede tapado (ajustado) */
     #cajaProductosDisponibles, #cajaProductosParaLlevar {
-        padding-bottom: calc(28px + env(safe-area-inset-bottom));
+        padding-bottom: calc(12px + env(safe-area-inset-bottom));
     }
 
-    /* Reservar espacio en el contenido principal para la barra de navegación del SO */
+    /* Reservar espacio en el contenido principal para la barra de navegación del SO (reducc.) */
     .content-area {
-        padding-bottom: calc(56px + env(safe-area-inset-bottom));
+        padding-bottom: calc(40px + env(safe-area-inset-bottom));
     }
 
     /* Ajustes extra para pantallas muy pequeñas */
@@ -637,20 +637,20 @@ header {
 
     /* Reglas adicionales sólo para Android (cuando body tiene .platform-android) */
     .platform-android .product-card, .platform-android .product-card-caja-list, .platform-android .product-card-caja-vertical {
-        padding: 4px;
-        gap: 4px;
+        padding: 6px;
+        gap: 6px;
     }
     .platform-android .product-card .field-group input,
     .platform-android .product-card .product-card-value,
     .platform-android .product-card-caja-list .caja-list-codigo,
     .platform-android .caja-v-item span {
-        font-size: 0.72rem;
-        padding: 4px 6px;
+        font-size: 0.74rem;
+        padding: 5px 6px;
     }
-    .platform-android #cajaProductosDisponibles { max-height: calc(38vh - env(safe-area-inset-bottom)); }
-    .platform-android #cajaProductosParaLlevar { max-height: calc(28vh - env(safe-area-inset-bottom)); }
-    .platform-android #cajaProductosDisponibles, .platform-android #cajaProductosParaLlevar { padding-bottom: calc(36px + env(safe-area-inset-bottom)); }
-    .platform-android .content-area { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+    .platform-android #cajaProductosDisponibles { max-height: calc(42vh - env(safe-area-inset-bottom)); }
+    .platform-android #cajaProductosParaLlevar { max-height: calc(32vh - env(safe-area-inset-bottom)); }
+    .platform-android #cajaProductosDisponibles, .platform-android #cajaProductosParaLlevar { padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+    .platform-android .content-area { padding-bottom: calc(56px + env(safe-area-inset-bottom)); }
 }
 
 /* ==========================================================================
