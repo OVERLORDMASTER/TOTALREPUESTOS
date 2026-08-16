@@ -1,11 +1,25 @@
 <header>
     <h2 class="header-title">Inventario de Productos</h2>
     <div class="header-actions inventario-actions">
-        <button class="action-btn btn-cat" data-modal-target="modalCategoria">Categorias de Productos</button>
-        <button class="action-btn btn-add" data-modal-target="modalProducto">Cargar Producto</button>
-        <button class="action-btn btn-del" id="btnEliminar">Eliminar</button>
-        <button class="action-btn btn-edit" id="btnEditar">Editar</button>
-        <button class="action-btn btn-purple" id="btnPrintInventory" style="grid-column: 1 / -1;">Imprimir Lista de Inventario</button>
+        <div class="desktop-tools">
+            <button class="action-btn btn-cat" data-modal-target="modalCategoria">Categorias de Productos</button>
+            <button class="action-btn btn-add" data-modal-target="modalProducto">Cargar Producto</button>
+            <button class="action-btn btn-del inventory-tool-btn inventory-delete-btn" id="btnEliminar">Eliminar</button>
+            <button class="action-btn btn-edit inventory-tool-btn inventory-edit-btn" id="btnEditar">Editar</button>
+            <button class="action-btn btn-purple inventory-tool-btn inventory-print-btn" id="btnPrintInventory">Imprimir Lista de Inventario</button>
+        </div>
+
+        <details class="tools-dropdown">
+            <summary class="action-btn btn-blue">Herramientas</summary>
+            <div class="tools-menu">
+                <button class="action-btn btn-cat" data-modal-target="modalCategoria">Categorías</button>
+                <button class="action-btn btn-add" data-modal-target="modalProducto">Cargar producto</button>
+                <button class="action-btn btn-del inventory-tool-btn inventory-delete-btn">Eliminar</button>
+                <button class="action-btn btn-edit inventory-tool-btn inventory-edit-btn">Editar</button>
+                <button class="action-btn btn-purple inventory-tool-btn inventory-print-btn">Imprimir Inventario</button>
+            </div>
+        </details>
+
         <input type="text" id="productSearch" placeholder="Buscar producto...">
     </div>
 </header>

@@ -12,9 +12,24 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <link rel="stylesheet" href="style.css">
-    <link rel="shortcut icon" href="/imagen/" type="image/x-icon">
-    <link rel="icon" type="imageN/x-icon" href="/imagen/logo.png">
+    <link rel="shortcut icon" href="/imagen/logo.png" type="image/x-icon">
+    <link rel="icon" type="image/png" href="/imagen/logo.png">
+    <!-- PWA y soporte móvil para Android / iOS -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#121212">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="TOTAL REPUESTOS">
+    <link rel="apple-touch-icon" href="/imagen/logo.png">
     <script>
+        // Registrar Service Worker para soporte PWA e instalación en Android / Desktop
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(err => console.warn('SW error:', err));
+            });
+        }
+
         // Aplica el tema (claro/oscuro) guardado en localStorage para evitar el parpadeo.
         // Este script se ejecuta antes de que se renderice el body.
         const THEME_KEY = 'appTheme';
@@ -95,12 +110,22 @@
                 </div>
 
                 <div class="field-group">
-                    <label for="cliTelefono">Teléfono (Solo números, máx. 16 dígitos) *</label>
-                    <input type="text" id="cliTelefono" maxlength="16" inputmode="numeric" pattern="[0-9]*" required placeholder="Ej. 04141234567" autocomplete="off">
+                    <label for="cliTelefono">Teléfono (opcional)</label>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <select id="cliCodTelefono" style="width: 90px; flex-shrink: 0;">
+                            <option value="0414">0414</option>
+                            <option value="0424">0424</option>
+                            <option value="0426">0426</option>
+                            <option value="0416">0416</option>
+                            <option value="0422">0422</option>
+                            <option value="0412">0412</option>
+                        </select>
+                        <input type="text" id="cliTelefono" maxlength="7" inputmode="numeric" pattern="[0-9]*" placeholder="Ej. 1234567" autocomplete="off" style="flex: 1;">
+                    </div>
                 </div>
 
                 <div class="field-group">
-                    <label for="cliDireccion">Dirección</label>
+                    <label for="cliDireccion">Dirección (opcional)</label>
                     <textarea id="cliDireccion" rows="2" placeholder="Dirección del cliente (opcional)" style="resize: none;"></textarea>
                 </div>
 
@@ -114,13 +139,17 @@
                 <div class="field-group">
                     <label>Desglose de Montos y Tasas Actuales</label>
                     <div class="modal-resumen-pago">
-                        <div class="modal-resumen-row">
-                            <span>Total a Pagar ($):</span>
-                            <span id="modalTotalUsd" style="font-weight: bold;">$ 0.00</span>
+                        <div class="modal-resumen-row" id="modalTotalUsdRow">
+                            <span id="modalTotalUsdLabel">Total a Pagar $ (bcv):</span>
+                            <span id="modalTotalUsd" style="font-weight: bold; color: var(--btn-green);">$ 0.00</span>
                         </div>
-                        <div class="modal-resumen-row">
-                            <span>Total en Bolívares (Bs):</span>
-                            <span id="modalTotalBs" style="font-weight: bold; color: var(--btn-green);">Bs 0.00</span>
+                        <div class="modal-resumen-row" id="modalTotalBsRow">
+                            <span id="modalTotalBsLabel">Total a Pagar bs (bcv):</span>
+                            <span id="modalTotalBs" style="font-weight: bold;">$ 0.00</span>
+                        </div>
+                        <div class="modal-resumen-row" id="modalTotalEfectivoRow">
+                            <span id="modalTotalEfectivoLabel">Total en pagar $ efectivo :</span>
+                            <span id="modalTotal$" style="font-weight: bold; color: var(--btn-orange);">$ 0.00</span>
                         </div>
                         <div class="modal-resumen-row" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-color);">
                             <span style="color: var(--btn-green);">Total Pagado ($):</span>
@@ -132,6 +161,7 @@
                         </div>
                         <div class="modal-tasas-grid">
                             <div>Tasa BCV: <span id="lblTasaBcvBase">0.00</span></div>
+                            <div>Tasa Paralelo: <span id="lblTasaParaleloBase">0.00</span></div>
                         </div>
                     </div>
                 </div>
@@ -151,10 +181,10 @@
             <div class="modal-form" id="formCategoria">
                 <input type="hidden" id="catId">
                 <div class="field-group"><label>Nombre</label><input type="text" id="catNombre"></div>
-                <div class="modal-buttons categoria-management" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: center;">
+                <div class="modal-buttons categoria-management" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: center;">
                     <button type="button" class="action-btn btn-add" id="btnAgregarCat">Agregar</button>
+                    <button type="button" class="action-btn btn-edit" id="btnEditarCat">Editar</button>
                     <button type="button" class="action-btn btn-del" id="btnEliminarCat">Eliminar</button>
-                    <button type="button" class="action-btn btn-edit" id="btnEditarCat">editar</button>
                     <input type="text" id="catBuscar" placeholder="buscar" style="grid-column: 1 / -1; width: 100%; padding-left: 12px;">
                 </div>
             </div>
@@ -206,8 +236,8 @@
                 <!-- Contenedor para la calculadora de precios -->
                 <div id="calculator-container" style="grid-column: span 2; display: none;">
                     <div id="calculator-inputs" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
-                        <div class="field-group" style="margin:0;"><label for="calcCostoUsdt">Costo ($ USDT)</label><input type="number" step="0.01" id="calcCostoUsdt" placeholder="Ej: 8.50"></div>
-                        <div class="field-group" style="margin:0;"><label for="calcDescuento">Descuento (%)</label><input type="number" step="0.01" id="calcDescuento" value="0" placeholder="Ej: 10"></div>
+                        <div class="field-group" style="margin:0;"><label for="calcCostoUsdt">Precio $ Proveedor</label><input type="number" step="0.01" id="calcCostoUsdt" placeholder="Ej: 8.50"></div>
+                        <div class="field-group" style="margin:0;"><label for="calcDescuento">Descuento (%)</label><input type="number" step="0.01" id="calcDescuento" placeholder="Ej: 10"></div>
                         <div class="field-group" style="margin:0;"><label for="calcGanancia">Ganancia (%)</label><input type="number" step="0.01" id="calcGanancia" placeholder="Ej: 20"></div>
                     </div>
                     <div style="text-align: center; margin: 15px 0;">
@@ -215,11 +245,10 @@
                     </div>
                     <div id="calculator-results" style="display: none; background: var(--bg-input); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
                         <h4 style="margin-top: 0; margin-bottom: 10px; color: var(--text-muted); font-size: 0.8rem; text-align: center;">RESULTADOS DEL CÁLCULO</h4>
-                        <p style="font-size: 0.9rem;"><strong>Venta $ Efectivo:</strong> <span id="resVentaUsdt">0.00</span></p>
-                        <p style="font-size: 0.9rem; margin-bottom: 5px;"><strong>Costo $ BCV:</strong> <span id="resCostoBcv">0.00</span></p>
-                        <p style="font-size: 0.9rem; margin-bottom: 5px;"><strong>Venta $ BCV:</strong> <span id="resVentaBcv">0.00</span></p>
-                        
-
+                        <p style="font-size: 0.9rem; margin-bottom: 5px;"><strong>Costo $ Efectivo:</strong> <span id="resCostoEfectivo" style="font-weight: bold; color: var(--btn-orange);">$ 0.00</span></p>
+                        <p style="font-size: 0.9rem; margin-bottom: 5px;"><strong>Venta $ Efectivo:</strong> <span id="resVentaUsdt" style="font-weight: bold; color: var(--btn-orange);">$ 0.00</span></p>
+                        <p style="font-size: 0.9rem; margin-bottom: 5px;"><strong>Costo $ BCV:</strong> <span id="resCostoBcv" style="font-weight: bold;">$ 0.00</span></p>
+                        <p style="font-size: 0.9rem; margin-bottom: 5px;"><strong>Venta $ BCV:</strong> <span id="resVentaBcv" style="font-weight: bold; color: var(--btn-green);">$ 0.00</span></p>
                     </div>
                 </div>
 
@@ -309,11 +338,21 @@
                     </div>
                 </div>
                 <div class="field-group">
-                    <label for="editCliTelefono">Teléfono (Solo números, máx. 16 dígitos) *</label>
-                    <input type="text" id="editCliTelefono" maxlength="16" inputmode="numeric" pattern="[0-9]*" required placeholder="Ej. 04141234567" autocomplete="off">
+                    <label for="editCliTelefono">Teléfono (opcional)</label>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <select id="editCliCodTelefono" style="width: 90px; flex-shrink: 0;">
+                            <option value="0414">0414</option>
+                            <option value="0424">0424</option>
+                            <option value="0426">0426</option>
+                            <option value="0416">0416</option>
+                            <option value="0422">0422</option>
+                            <option value="0412">0412</option>
+                        </select>
+                        <input type="text" id="editCliTelefono" maxlength="7" inputmode="numeric" pattern="[0-9]*" placeholder="Ej. 1234567" autocomplete="off" style="flex: 1;">
+                    </div>
                 </div>
                 <div class="field-group">
-                    <label for="editCliDireccion">Dirección</label>
+                    <label for="editCliDireccion">Dirección (opcional)</label>
                     <textarea id="editCliDireccion" rows="2" placeholder="Dirección del cliente (opcional)" style="resize: none;"></textarea>
                 </div>
 

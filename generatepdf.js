@@ -1,3 +1,11 @@
+/*
+ * DEPRECADO: Este archivo ya no se utiliza.
+ * La funcionalidad ha sido movida a /source/generatepdf.js
+ */
+/*
+ * DEPRECADO: Este archivo ya no se utiliza.
+ * La funcionalidad ha sido movida a /source/generatepdf.js
+ */
 import { showToast } from './utils.js';
 
 // --- FUNCIONES DE FORMATO DE NÚMEROS ---

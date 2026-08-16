@@ -2,37 +2,49 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lista de Inventario</title>
     <link rel="stylesheet" href="inventario_pdf.css">
 </head>
 <body>
+
 <div class="invoice-container">
     <div class="header">
         <div class="logo-section">
-            <img src="/imagen/logo.png" alt="TOTAL REPUESTOS C&S Logo">
+            <img src="/imagen/logo.png" alt="TOTAL REPUESTOS C&S Logo" onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';">
+            <div id="logo-fallback" style="display:none; font-weight:bold; font-size:16px; border:2px dashed #999; border-radius:6px; padding:10px;">[ LOGO ]</div>
             <div class="company-info">
                 UBICACIÓN : Carrera 28 entre calles 44 y 45.<br>
                 NRO CELULAR : 0424-5436998<br>
                 INSTAGRAM : @totalrepuestosc
             </div>
         </div>
-        <div class="title-section">
-            <h1>LISTA DE INVENTARIO</h1>
+        <div class="title-section" style="text-align: right;">
+            <div style="font-weight: bold; font-size: 13.5px; margin-bottom: 6px; color: #2c3e50; text-transform: uppercase; letter-spacing: 0.5px;">LISTA DE INVENTARIO</div>
         </div>
     </div>
 
-    <div class="summary-info">
-        <div><strong>Fecha de Impresión:</strong> <span id="fechaImpresion"></span></div>
-        <div><strong>Total de Productos (SKU):</strong> <span id="totalProductos"></span></div>
-        <div><strong>Total de Unidades:</strong> <span id="totalUnidades"></span></div>
+    <div class="form-row">
+        <div class="field-group" style="flex: 2.2;">
+            <label>FECHA DE IMPRESIÓN :</label>
+            <input type="text" id="fechaImpresion" readonly>
+        </div>
+        <div class="field-group" style="flex: 1.4;">
+            <label>TOTAL PRODUCTOS (SKU) :</label>
+            <input type="text" id="totalProductos" readonly style="font-weight: bold; text-align: center;">
+        </div>
+        <div class="field-group" style="flex: 1.4;">
+            <label>TOTAL DE UNIDADES :</label>
+            <input type="text" id="totalUnidades" readonly style="font-weight: bold; text-align: center;">
+        </div>
     </div>
 
     <div class="table-responsive">
         <table id="itemsTable">
             <thead>
                 <tr>
-                    <th style="width: 20%;">CÓDIGO</th>
-                    <th style="width: 50%;">PRODUCTO</th>
+                    <th style="width: 18%;">CÓDIGO</th>
+                    <th style="width: 52%;">PRODUCTO</th>
                     <th style="width: 15%;">CANTIDAD</th>
                     <th style="width: 15%;">VERIFICADO</th>
                 </tr>
@@ -42,5 +54,6 @@
         </table>
     </div>
 </div>
+
 </body>
 </html>

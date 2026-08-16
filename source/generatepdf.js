@@ -22,11 +22,41 @@ async function imageToBase64(url) {
     }
 }
 
+function construirNombreArchivoFactura(venta) {
+    const nombre = (venta.cliente_nombre || 'Consumidor Final').trim();
+    const cedula = (venta.cliente_cedula || '').trim();
+
+    // Limpiar caracteres no permitidos en nombres de archivos
+    let cleanNombre = nombre.replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '_');
+    let cleanCedula = cedula.replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '_');
+
+    if (!cleanNombre) cleanNombre = 'Consumidor_Final';
+
+    if (cleanCedula) {
+        return `${cleanNombre}_${cleanCedula}`;
+    }
+    return `${cleanNombre}`;
+}
+
 export async function generarFacturaPDF(venta, paraleloRate, productosCache = []) {
     console.log('Iniciando preparación de HTML para impresión para la venta ID:', venta.id);
 
+    const nombreArchivo = construirNombreArchivoFactura(venta);
+    const tituloOriginal = document.title;
+
+    // Determinar el método de pago para elegir la plantilla correcta
+    let pagos = [];
+    try {
+        pagos = JSON.parse(venta.tipo_pago);
+    } catch (e) {
+        // Fallback para formato antiguo (string simple)
+    }
+    const metodosEnEfectivo = ['Binance', 'Dólares en efectivo', 'Zelle'];
+    const pagoEnEfectivo = Array.isArray(pagos) && pagos.some(p => metodosEnEfectivo.includes(p.metodo));
+    const templateFileName = pagoEnEfectivo ? 'factura_USD.html' : 'factura.html';
+
     const [htmlResponse, cssResponse] = await Promise.all([
-        fetch('source/factura.html'),
+        fetch(`source/${templateFileName}`),
         fetch('source/factura.css')
     ]).catch(err => {
         showToast('Error de red al cargar recursos de factura.', 'error');
@@ -35,7 +65,7 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     });
 
     if (!htmlResponse.ok) {
-        throw new Error(`No se pudo cargar factura.html: ${htmlResponse.statusText}`);
+        throw new Error(`No se pudo cargar ${templateFileName}: ${htmlResponse.statusText}`);
     }
     if (!cssResponse.ok) {
         throw new Error(`No se pudo cargar factura.css: ${cssResponse.statusText}`);
@@ -50,11 +80,13 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     styleElement.textContent = cssTemplate;
     doc.head.appendChild(styleElement);
 
-    // Establecer el título de la página, que se usará como nombre de archivo sugerido
-    const titleTag = doc.querySelector('title');
-    if (titleTag) {
-        titleTag.textContent = `factura-${venta.id}`;
+    // Establecer el título de la página interna del PDF
+    let titleTag = doc.querySelector('title');
+    if (!titleTag) {
+        titleTag = doc.createElement('title');
+        doc.head.appendChild(titleTag);
     }
+    titleTag.textContent = nombreArchivo;
 
     // Convertir el logo a Base64 y embeberlo
     try {
@@ -86,18 +118,29 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     const tipoPagoContainer = doc.querySelector('#tipoPagoContainer');
     let paymentMethodsHtml = '';
     try {
-        const pagos = JSON.parse(venta.tipo_pago);
+        pagos = JSON.parse(venta.tipo_pago);
         if (Array.isArray(pagos) && pagos.length > 0) {
-            paymentMethodsHtml = pagos.map(p => `<span class="payment-method-badge">Tipo de pago: ${p.metodo}</span>`).join('');
-            paymentMethodsHtml = `<div style="display: flex; flex-wrap: wrap; gap: 5px;">${paymentMethodsHtml}</div>`;
+            paymentMethodsHtml = pagos.map(p => {
+                const isBs = p.moneda === 'BS' || ['Pago Móvil', 'Bolívares en efectivo'].includes(p.metodo);
+                let displayMonto = '';
+                if (p.monto_original !== undefined && p.monto_original !== null && !isNaN(parseFloat(p.monto_original))) {
+                    displayMonto = isBs ? `Bs ${parseFloat(p.monto_original).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$ ${parseFloat(p.monto_original).toFixed(2)}`;
+                } else if (p.monto !== undefined && p.monto !== null && !isNaN(parseFloat(p.monto))) {
+                    displayMonto = isBs ? `Bs ${(parseFloat(p.monto) * saleRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$ ${parseFloat(p.monto).toFixed(2)}`;
+                }
+                return `<span class="payment-method-badge">${p.metodo}${displayMonto ? ': ' + displayMonto : ''}</span>`;
+            }).join('');
+            paymentMethodsHtml = `<div class="payment-methods-list" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px;">${paymentMethodsHtml}</div>`;
         } else {
-            paymentMethodsHtml = `<span class="payment-method-badge">Tipo de pago: ${venta.tipo_pago || 'N/A'}</span>`;
+            // Fallback para formato antiguo (string simple)
+            paymentMethodsHtml = `<span class="payment-method-badge">${venta.tipo_pago || 'N/A'}</span>`;
         }
     } catch (e) {
-        paymentMethodsHtml = `<span class="payment-method-badge">Tipo de pago: ${venta.tipo_pago || 'N/A'}</span>`;
+        // Si JSON.parse falla, es probable que sea el formato antiguo
+        paymentMethodsHtml = `<span class="payment-method-badge">${venta.tipo_pago || 'N/A'}</span>`;
     }
     if (tipoPagoContainer) {
-        tipoPagoContainer.innerHTML = `<label>MÉTODOS DE PAGO:</label>${paymentMethodsHtml}`;
+        tipoPagoContainer.innerHTML = `<label style="white-space: nowrap; margin-right: 8px;">MÉTODOS DE PAGO :</label>${paymentMethodsHtml}`;
     }
 
     // --- LLENAR LA TABLA DE PRODUCTOS ---
@@ -136,15 +179,23 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
         #tableBody td .text-left {
             text-align: left;
         }
+        .payment-methods-list {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
         .payment-method-badge {
-            display: inline-block;
-            background-color: #e0e0e0; /* Light grey background */
-            color: #333; /* Dark text */
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.75em; /* Smaller font size */
-            white-space: nowrap; /* Prevent breaking */
-            margin: 2px; /* Small margin between badges */
+            display: inline-flex;
+            align-items: center;
+            background-color: transparent !important;
+            color: #111 !important;
+            padding: 0;
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+            margin: 0;
         }
         /* HACK: Cubierta para tapar el pie de página del navegador (URL, fecha, etc.) */
         @media print {
@@ -161,8 +212,10 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
             .payment-method-badge {
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
-                background-color: #e0e0e0 !important;
-                color: #333 !important;
+                background-color: transparent !important;
+                color: #000 !important;
+                font-size: 13px !important;
+                font-weight: 600 !important;
             }
         }
     `;
@@ -182,19 +235,30 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
 
     detallesValidos.forEach(item => {
         const qty = Number(item.cantidad) || 0;
-        const precioUnitarioBs = formatCurrency((Number(item.precio_unitario) || 0) * saleRate);
-        const subtotalBs = formatCurrency(qty * (Number(item.precio_unitario) || 0) * saleRate);
-        const producto = productosCache.find(p => p.codigo === (item.producto_codigo || ''));
-        const marca = producto ? (producto.marca || '') : '';
+        const precioUnitarioStored = Number(item.precio_unitario) || 0; // This now holds the correct price (BCV or Efectivo)
+        const producto = productosCache.find(p => p.codigo === (item.producto_codigo || '')); // Still useful for brand
+        const marca = producto ? (producto.marca || 'N/A') : 'N/A'; // Brand is not stored in detalle_ventas
+
+        let precioUnitarioDisplay, subtotalDisplay;
+
+        if (pagoEnEfectivo) {
+            // If paid in cash, item.precio_unitario already holds the cash price.
+            precioUnitarioDisplay = formatCurrency(precioUnitarioStored);
+            subtotalDisplay = formatCurrency(qty * precioUnitarioStored);
+        } else {
+            // Si el pago fue en bolívares, mostrar montos en bolívares
+            precioUnitarioDisplay = formatCurrency(precioUnitarioStored * saleRate);
+            subtotalDisplay = formatCurrency(qty * precioUnitarioStored * saleRate);
+        }
 
         const row = doc.createElement('tr');
         row.innerHTML = `
             <td><div class="codigo">${item.producto_codigo || ''}</div></td>
             <td><div class="text-left descripcion">${item.producto_nombre || ''}</div></td>
             <td><div>${marca}</div></td>
-            <td><div class="precioBS">${precioUnitarioBs}</div></td>
-            <td><div class="subtotalBS">${subtotalBs}</div></td>
             <td><div class="uds">${formatInteger(qty)}</div></td>
+            <td><div class="precioBS">${precioUnitarioDisplay}</div></td>
+            <td><div class="subtotalBS">${subtotalDisplay}</div></td>
             <td class="no-print"></td>
         `;
         tableBody.appendChild(row);
@@ -205,7 +269,15 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     footerCover.className = 'print-footer-cover';
     doc.body.appendChild(footerCover);
 
-    doc.querySelector('#totalBS')?.setAttribute('value', formatCurrency(parseFloat(venta.total_bs)));
+    // Establecer el valor total correcto (USD o BS)
+    if (pagoEnEfectivo) {
+        // Para la plantilla de USD, solo llenamos el total en USD
+        doc.querySelector('#totalUSD')?.setAttribute('value', formatCurrency(parseFloat(venta.total_usd)));
+    } else {
+        // Para la plantilla de BCV, llenamos ambos totales
+        doc.querySelector('#totalUSD')?.setAttribute('value', formatCurrency(parseFloat(venta.total_usd)));
+        doc.querySelector('#totalBS')?.setAttribute('value', formatCurrency(parseFloat(venta.total_bs)));
+    }
 
     // Eliminar scripts que puedan ejecutar código en el iframe (p. ej. addRow en DOMContentLoaded)
     doc.querySelectorAll('script').forEach(s => s.remove());
@@ -214,14 +286,19 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     const iframe = document.createElement('iframe');
 
     return new Promise((resolve, reject) => {
-        
         iframe.style.position = 'fixed';
         iframe.style.width = '0';
         iframe.style.height = '0';
         iframe.style.border = 'none';
 
+        // Modificar temporalmente el título del documento principal
+        document.title = nombreArchivo;
+
         iframe.onload = function() {
             try {
+                if (iframe.contentDocument) {
+                    iframe.contentDocument.title = nombreArchivo;
+                }
                 iframe.contentWindow.focus();
                 iframe.contentWindow.print();
                 showToast('Se ha abierto el diálogo de impresión.', 'success');
@@ -232,10 +309,11 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
                 reject(e);
             } finally {
                 setTimeout(() => {
+                    document.title = tituloOriginal;
                     if (iframe.parentElement) {
                         document.body.removeChild(iframe);
                     }
-                }, 1000);
+                }, 2000);
             }
         };
 
@@ -269,10 +347,15 @@ export async function generarInventarioPDF(productosCache = []) {
     doc.head.appendChild(styleElement);
 
     // Establecer el título de la página, que se usará como nombre de archivo sugerido
-    const titleTagInv = doc.querySelector('title');
-    if (titleTagInv) {
-        titleTagInv.textContent = 'inventario_actual';
+    let titleTagInv = doc.querySelector('title');
+    if (!titleTagInv) {
+        titleTagInv = doc.createElement('title');
+        doc.head.appendChild(titleTagInv);
     }
+    const fechaArchivo = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const nombreArchivoInv = `inventario_${fechaArchivo}`;
+    titleTagInv.textContent = nombreArchivoInv;
+    const tituloOriginal = document.title;
 
     // Convertir el logo a Base64 y embeberlo
     try {
@@ -287,16 +370,21 @@ export async function generarInventarioPDF(productosCache = []) {
     }
 
     // Llenar información de resumen
-    doc.querySelector('#fechaImpresion').textContent = new Date().toLocaleString('es-VE');
-    doc.querySelector('#totalProductos').textContent = formatInteger(productosCache.length);
-    const totalUnidades = productosCache.reduce((sum, p) => sum + p.cantidad, 0);
-    doc.querySelector('#totalUnidades').textContent = formatInteger(totalUnidades);
+    const fechaEl = doc.querySelector('#fechaImpresion');
+    if (fechaEl) {
+        fechaEl.setAttribute('value', new Date().toLocaleString('es-VE'));
+    }
+    const totalProdEl = doc.querySelector('#totalProductos');
+    if (totalProdEl) {
+        totalProdEl.setAttribute('value', formatInteger(productosCache.length));
+    }
+    const totalUnidades = productosCache.reduce((sum, p) => sum + (Number(p.cantidad) || 0), 0);
+    const totalUniEl = doc.querySelector('#totalUnidades');
+    if (totalUniEl) {
+        totalUniEl.setAttribute('value', formatInteger(totalUnidades));
+    }
 
-    // Añadir el elemento que cubrirá el pie de página
-    const footerCover = doc.createElement('div');
-    footerCover.className = 'print-footer-cover';
-    doc.body.appendChild(footerCover);
-
+    // Añadir el elemento de la tabla
     const table = doc.querySelector('#itemsTable');
     const templateTbody = table.querySelector('tbody');
     if (templateTbody) templateTbody.remove();
@@ -325,8 +413,8 @@ export async function generarInventarioPDF(productosCache = []) {
             row.innerHTML = `
                 <td><div>${item.codigo || ''}</div></td>
                 <td><div class="text-left">${item.nombre || ''}</div></td>
-                <td><div>${formatInteger(item.cantidad)}</div></td>
-                <td class="checkbox-cell"></td>
+                <td><div style="font-weight: 600;">${formatInteger(item.cantidad)}</div></td>
+                <td class="checkbox-cell"><span class="checkbox-box"></span></td>
             `;
             categoryTbody.appendChild(row);
         });
@@ -342,14 +430,26 @@ export async function generarInventarioPDF(productosCache = []) {
         iframe.style.height = '0';
         iframe.style.border = 'none';
 
+        document.title = nombreArchivoInv;
+
         iframe.onload = function() {
             try {
+                if (iframe.contentDocument) {
+                    iframe.contentDocument.title = nombreArchivoInv;
+                }
                 iframe.contentWindow.focus();
                 iframe.contentWindow.print();
                 showToast('Se ha abierto el diálogo de impresión.', 'success');
                 resolve();
-            } catch (e) { reject(e); } finally {
-                setTimeout(() => { if (iframe.parentElement) document.body.removeChild(iframe); }, 1000);
+            } catch (e) {
+                reject(e);
+            } finally {
+                setTimeout(() => {
+                    document.title = tituloOriginal;
+                    if (iframe.parentElement) {
+                        document.body.removeChild(iframe);
+                    }
+                }, 2000);
             }
         };
 

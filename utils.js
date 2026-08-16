@@ -71,9 +71,11 @@ export async function showConfirmation(message, onConfirm) {
  * Ej: 1234.56 -> 1.234,56
  */
 export function formatCurrency(number) {
-    return new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(number);
+    const val = Number.isFinite(Number(number)) ? Number(number) : 0;
+    return new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
 }
 
 export function formatInteger(number) {
-    return new Intl.NumberFormat('es-VE').format(number);
+    const val = Number.isFinite(Number(number)) ? Math.round(Number(number)) : 0;
+    return new Intl.NumberFormat('es-VE').format(val);
 }

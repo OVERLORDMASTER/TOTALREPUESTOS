@@ -78,109 +78,36 @@
                     <th style="width: 33%;">DESCRIPCIÓN</th>
                     <th style="width: 12%;">MARCA</th>
                     <th style="width: 7%;">UNDS</th>
-                    <th style="width: 14%;">PRECIO UNITARIO BS</th>
-                    <th style="width: 14%;">SUBTOTAL BS</th>
+                    <th style="width: 14%;">PRECIO UNITARIO $</th>
+                    <th style="width: 14%;">SUBTOTAL $</th>
                     <th class="no-print" style="width: 10%;">ACCIÓN</th>
                 </tr>
             </thead>
             <tbody id="tableBody">
-                </tbody>
+                <!-- Las filas se generan dinámicamente -->
+            </tbody>
         </table>
     </div>
 
     <div class="no-print" style="margin-bottom: 20px;">
-        <button class="btn" onclick="addRow()">+ AGREGAR FILA</button>
+        <!-- Los botones de agregar/limpiar no son necesarios para el PDF generado -->
     </div>
 
     <div class="footer-section">
         <div class="totals-box">
             <div class="total-field">
-                <span>TOTAL USD (BCV):</span>
+                <span>TOTAL $ EFECTIVO:</span>
                 <input type="text" id="totalUSD" value="0.00" readonly>
-            </div>
-            <div class="total-field">
-                <span>TOTAL BS (BCV):</span>
-                <input type="text" id="totalBS" value="0.00" readonly>
             </div>
         </div>
 
         <div class="actions">
-            <button class="btn btn-danger" onclick="clearForm()">LIMPIAR</button>
-            <button class="btn" onclick="window.print()">IMPRIMIR / GUARDAR PDF</button>
+            <!-- El botón de imprimir es manejado por el iframe, no es necesario aquí -->
         </div>
     </div>
 </div>
 
-<script>
-    window.addEventListener('DOMContentLoaded', () => {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        document.getElementById('fechaHora').value = `${year}-${month}-${day}T${hours}:${minutes}`;
-
-        for(let i = 0; i < 10; i++) {
-            addRow();
-        }
-    });
-
-    function addRow() {
-        const tbody = document.getElementById('tableBody');
-        const row = document.createElement('tr');
-        
-        row.innerHTML = `
-            <td><input type="text" class="codigo"></td>
-            <td><input type="text" class="text-left descripcion"></td>
-            <td><input type="text" class="marca"></td>
-            <td><input type="number" class="uds" value="1" oninput="calculateRowBS(this)"></td>
-            <td><input type="number" step="0.01" class="precioBS" oninput="calculateRowBS(this)"></td>
-            <td><input type="text" class="subtotalBS" value="0.00" readonly></td>
-            <td class="no-print"><button type="button" class="btn btn-danger" style="padding: 2px 8px; font-size: 11px; border-radius: 4px;" onclick="deleteRow(this)">X</button></td>
-        `;
-        tbody.appendChild(row);
-    }
-
-    function deleteRow(btn) {
-        const row = btn.closest('tr');
-        row.remove();
-        calculateTotals();
-    }
-
-    function calculateRowBS(element) {
-        const row = element.closest('tr');
-        const precioBS = parseFloat(row.querySelector('.precioBS').value) || 0;
-        const uds = parseFloat(row.querySelector('.uds').value) || 0;
-        
-        const subtotalBS = precioBS * uds;
-        row.querySelector('.subtotalBS').value = subtotalBS.toFixed(2);
-        
-        calculateTotals();
-    }
-
-    function calculateTotals() {
-        let totalBS = 0;
-
-        document.querySelectorAll('.subtotalBS').forEach(input => {
-            totalBS += parseFloat(input.value) || 0;
-        });
-
-        document.getElementById('totalBS').value = totalBS.toFixed(2);
-    }
-
-    function clearForm() {
-        if(confirm('¿Está seguro de limpiar todos los campos?')) {
-            document.querySelectorAll('input').forEach(input => {
-                if(input.type !== 'datetime-local') input.value = '';
-            });
-            document.getElementById('tableBody').innerHTML = '';
-            for(let i = 0; i < 10; i++) {
-                addRow();
-            }
-        }
-    }
-</script>
+<!-- No se necesita el script de la factura manual para el PDF generado -->
 
 </body>
 </html>

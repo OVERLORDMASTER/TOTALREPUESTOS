@@ -1,35 +1,45 @@
+:root {
+    --primary-color: #2c3e50;
+    --border-color: #34495e;
+    --light-bg: #f8f9fa;
+    --table-header-bg: #f1f2f6;
+    --table-border: #dcdde1;
+}
+
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    font-size: 11px;
-    color: #000; /* Texto más oscuro para mejor legibilidad */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     margin: 0;
-    background-color: #f8f9fa;
+    padding: 20px;
+    background-color: #eef2f3;
+    color: #333;
+    font-size: 12px;
 }
 
 .invoice-container {
-    width: 100%;
-    max-width: 800px;
-    margin: 20px auto;
-    padding: 25px;
-    box-sizing: border-box;
-    background-color: #ffffff;
+    max-width: 920px;
+    margin: 0 auto;
+    background: #fff;
+    padding: 35px;
+    border: 2px solid var(--border-color);
     border-radius: 12px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+    box-sizing: border-box;
 }
 
+/* Header Section */
 .header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    border-bottom: 2px solid #eaeaea;
-    padding-bottom: 15px;
+    align-items: flex-start;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 20px;
     margin-bottom: 20px;
 }
 
 .logo-section {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 15px;
 }
 
 .logo-section img {
@@ -37,125 +47,190 @@ body {
     height: auto;
 }
 
+.company-info {
+    font-size: 13.5px;
+    line-height: 1.5;
+    font-weight: 600;
+    color: #444;
+}
+
 .title-section {
     text-align: right;
 }
 
-.title-section h1 {
-    margin: 0 0 8px 0;
-    font-size: 20px;
-    color: #111;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-}
-
-.company-info {
-    font-size: 9.5px;
-    line-height: 1.5;
-    color: #000; /* Texto más oscuro */
-}
-
-.summary-info {
+/* Form Fields / Summary Section */
+.form-row {
     display: flex;
-    justify-content: space-between;
-    background-color: #f1f3f5;
-    padding: 10px 15px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    font-size: 11px;
-    color: #000; /* Texto más oscuro */
+    gap: 12px;
+    margin-bottom: 15px;
 }
 
-.table-responsive {
+.field-group {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px 12px;
+    background: #fff;
+    flex: 1;
+    font-size: 13px;
+}
+
+.field-group label {
+    font-weight: bold;
+    margin-right: 8px;
+    white-space: nowrap;
+    color: var(--primary-color);
+    text-transform: uppercase;
+    font-size: 12px;
+}
+
+.field-group input {
+    border: none;
+    outline: none;
     width: 100%;
-    overflow: hidden;
-    border-radius: 8px;
-    border: 1px solid #dee2e6;
+    font-size: 13px;
+    background: transparent;
+    color: #000;
+    font-family: inherit;
 }
 
-#itemsTable {
+/* Table Section */
+.table-responsive {
+    overflow-x: auto;
+    margin-top: 15px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+table {
     width: 100%;
     border-collapse: collapse;
-    border-style: hidden; /* Oculta bordes externos duplicados por el border-radius */
+    font-size: 12px;
 }
 
-#itemsTable th, #itemsTable td {
-    border: 1px solid #dee2e6;
-    padding: 8px 10px;
+th, td {
+    border: 1px solid var(--table-border);
+    padding: 8px 6px;
     text-align: center;
     vertical-align: middle;
 }
 
-#itemsTable th {
-    background-color: #e9ecef; /* Fondo claro para la cabecera */
-    color: #000; /* Texto negro para la cabecera */
-    font-weight: 600;
+th {
+    background-color: var(--table-header-bg);
+    color: var(--primary-color);
     text-transform: uppercase;
-    font-size: 10px;
+    font-size: 11px;
+    font-weight: bold;
     letter-spacing: 0.5px;
 }
 
-#itemsTable tbody tr:nth-child(even) {
-    background-color: #f8f9fa;
+td div {
+    font-size: 12px;
+    color: #000;
 }
 
-#itemsTable tbody tr:hover {
-    background-color: #f1f3f5;
-}
-
-#itemsTable td .text-left {
+td div.text-left {
     text-align: left;
+    padding-left: 6px;
 }
 
+/* Category header rows */
 .category-header-row td {
-    background-color: #e9ecef;
+    background-color: #f1f2f6;
     font-weight: bold;
     text-align: left !important;
     font-size: 12px;
-    color: #343a40;
+    color: var(--primary-color);
     text-transform: uppercase;
+    padding: 7px 10px;
+    letter-spacing: 0.5px;
 }
 
 .checkbox-cell {
-    width: 25px;
-    height: 25px;
-    border: 1px solid #adb5bd !important;
-    background-color: #fff;
+    width: 15%;
 }
 
+.checkbox-box {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid #7f8c8d;
+    border-radius: 3px;
+    background-color: #fff;
+    vertical-align: middle;
+}
+
+/* Print Styles */
 @media print {
     @page {
         size: auto;
-        margin: 10mm; /* Ajusta el margen si es necesario */
-        /* La URL y la fecha son parte de los "Encabezados y pies de página" del navegador. */
-        /* Esta opción se debe desactivar en el diálogo de impresión para un resultado limpio. */
+        margin: 10mm;
     }
 
     body {
-        font-size: 9pt;
-        background-color: #fff;
-    }
-    .invoice-container {
-        margin: 0;
+        background: none;
         padding: 0;
+        font-size: 9.5pt;
+    }
+
+    .invoice-container {
+        border: none;
         box-shadow: none;
+        padding: 0;
+        max-width: 100%;
         border-radius: 0;
     }
-    /* HACK: Cubierta para tapar el pie de página del navegador (URL, fecha, etc.) */
-    .print-footer-cover {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        height: 15mm; /* Altura para cubrir el pie de página, ajustar si es necesario */
-        background-color: white !important;
+
+    .table-responsive {
+        overflow: visible !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 6px !important;
+        margin-top: 12px !important;
+        margin-bottom: 0 !important;
+    }
+
+    table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        page-break-inside: auto;
+        break-inside: auto;
+    }
+
+    thead {
+        display: table-header-group !important;
+    }
+
+    tbody {
+        page-break-inside: auto;
+        break-inside: auto;
+    }
+
+    tr {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+
+    .category-header-row {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+
+    .category-header-row td,
+    th,
+    .field-group,
+    .header {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
-    .category-header-row td,
-    #itemsTable th,
-    #itemsTable tbody tr:nth-child(even) {
+
+    input,
+    td div {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
+        color: #000 !important;
     }
 }

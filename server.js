@@ -64,9 +64,9 @@ io.on('connection', (socket) => {
 
     // Escucha un evento de ejemplo 'cambio-dato' desde un cliente
     socket.on('cambio-dato', (data) => {
-        // Reenvía la información a todos los demás clientes conectados
-        io.emit('actualizacion-dato', data);
-        console.log('Dato recibido y retransmitido:', data);
+        // Reenvía la información a todos los demás clientes conectados (excepto al emisor)
+        socket.broadcast.emit('actualizacion-dato', data);
+        console.log('Dato recibido y retransmitido a otros clientes:', data);
     });
 
     socket.on('disconnect', () => {

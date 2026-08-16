@@ -1,10 +1,54 @@
 import { generarFacturaPDF, generarInventarioPDF } from './source/generatepdf.js';
 import { showToast, showConfirmation, formatCurrency, formatInteger } from './utils.js';
 
-// --- INICIO: Lógica para autocompletar datos del cliente ---
+// Conexión a Supabase
+const SUPABASE_URL = 'https://tqlbmcqkottvclikpxur.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_Gq9mJ5Qo9MIa-k0pRTB7hQ_Rda5qtBX';
+const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// --- INICIO: Lógica para autocompletar y formato de datos del cliente ---
 const inputCedula = document.getElementById('cliCedula');
 const selectTipoCedula = document.getElementById('cliTipoCedula');
 const btnBuscarCliente = document.getElementById('btnBuscarCliente');
+
+/**
+ * Descompone un número telefónico venezolano en código de área y 7 dígitos.
+ * Soporta formatos como '04141234567', '584141234567', '+584141234567', etc.
+ */
+const parseTelefonoVE = (rawPhone) => {
+    if (!rawPhone) return { cod: '0414', num: '' };
+    let cleaned = String(rawPhone).replace(/\D/g, '');
+    if (cleaned.startsWith('58') && cleaned.length >= 12) {
+        cleaned = '0' + cleaned.substring(2);
+    }
+    const codigosValidos = ['0414', '0424', '0426', '0416', '0422', '0412'];
+    for (const cod of codigosValidos) {
+        if (cleaned.startsWith(cod)) {
+            return { cod: cod, num: cleaned.substring(cod.length).slice(0, 7) };
+        }
+    }
+    if (cleaned.length >= 4) {
+        const potentialCod = cleaned.slice(0, 4);
+        if (codigosValidos.includes(potentialCod)) {
+            return { cod: potentialCod, num: cleaned.slice(4, 11) };
+        }
+    }
+    return { cod: '0414', num: cleaned.slice(0, 7) };
+};
+
+/**
+ * Convierte un número telefónico venezolano al formato internacional de WhatsApp (ej: '584141234567').
+ */
+const formatTelefonoWhatsApp = (rawPhone) => {
+    if (!rawPhone) return '';
+    let cleaned = String(rawPhone).replace(/\D/g, '');
+    if (cleaned.startsWith('0')) {
+        cleaned = '58' + cleaned.substring(1);
+    } else if (cleaned.length === 10 && !cleaned.startsWith('58')) {
+        cleaned = '58' + cleaned;
+    }
+    return cleaned;
+};
 
 /**
  * Busca el cliente más reciente en la base de datos por su cédula
@@ -17,22 +61,26 @@ const buscarClientePorCedula = async () => {
     const tipoCedula = selectTipoCedula.value;
     const numeroCedula = inputCedula.value.trim();
 
+    const nombreInput = document.getElementById('cliNombre');
+    const codTelefonoSelect = document.getElementById('cliCodTelefono');
+    const telefonoInput = document.getElementById('cliTelefono');
+    const direccionInput = document.getElementById('cliDireccion');
+
+    if (!nombreInput || !telefonoInput || !direccionInput) return;
+
     // No buscar si el campo de cédula está vacío o es muy corto
     if (numeroCedula.length < 7) {
         // Si el campo se vacía, limpiar los otros campos para permitir un nuevo ingreso
-        document.getElementById('cliNombre').value = '';
-        document.getElementById('cliTelefono').value = '';
-        document.getElementById('cliDireccion').value = '';
+        nombreInput.value = '';
+        if (codTelefonoSelect) codTelefonoSelect.value = '0414';
+        telefonoInput.value = '';
+        direccionInput.value = '';
         return;
     }
 
     const cedulaCompleta = `${tipoCedula}-${numeroCedula}`;
 
     // Feedback visual para el usuario mientras se realiza la búsqueda
-    const nombreInput = document.getElementById('cliNombre');
-    const telefonoInput = document.getElementById('cliTelefono');
-    const direccionInput = document.getElementById('cliDireccion');
-    
     const originalPlaceholders = {
         nombre: nombreInput.placeholder,
         telefono: telefonoInput.placeholder,
@@ -60,12 +108,15 @@ const buscarClientePorCedula = async () => {
         if (venta) {
             // Cliente encontrado: rellenar los campos del formulario
             nombreInput.value = venta.cliente_nombre || '';
-            telefonoInput.value = venta.cliente_telefono || '';
+            const parsed = parseTelefonoVE(venta.cliente_telefono);
+            if (codTelefonoSelect) codTelefonoSelect.value = parsed.cod;
+            telefonoInput.value = parsed.num;
             direccionInput.value = venta.cliente_direccion || '';
             showToast('Cliente encontrado. Datos cargados automáticamente.', 'success');
         } else {
             // Cliente no encontrado: limpiar campos para un nuevo registro y notificar
             nombreInput.value = '';
+            if (codTelefonoSelect) codTelefonoSelect.value = '0414';
             telefonoInput.value = '';
             direccionInput.value = '';
             showToast('Cliente no registrado. Puede ingresarlo como nuevo.', 'info');
@@ -75,15 +126,15 @@ const buscarClientePorCedula = async () => {
         showToast('Ocurrió un error al intentar buscar el cliente.', 'error');
     } finally {
         // Restaurar los placeholders originales en todos los casos
-        nombreInput.placeholder = originalPlaceholders.nombre;
-        telefonoInput.placeholder = originalPlaceholders.telefono;
-        direccionInput.placeholder = originalPlaceholders.direccion;
+        if (nombreInput) nombreInput.placeholder = originalPlaceholders.nombre;
+        if (telefonoInput) telefonoInput.placeholder = originalPlaceholders.telefono;
+        if (direccionInput) direccionInput.placeholder = originalPlaceholders.direccion;
     }
 };
 
 if (inputCedula && selectTipoCedula && btnBuscarCliente) {
     // Restricción de formato para el input de cédula
-    inputCedula.addEventListener('input', function() {
+    inputCedula.addEventListener('input', function () {
         this.value = this.value.replace(/\D/g, '').slice(0, 10);
     });
 
@@ -101,14 +152,21 @@ if (inputCedula && selectTipoCedula && btnBuscarCliente) {
     // Disparar la búsqueda si se cambia el tipo de cédula (V, E, J, G)
     selectTipoCedula.addEventListener('change', buscarClientePorCedula);
 }
-// --- FIN: Lógica para autocompletar datos del cliente ---
 
 const inputTelefono = document.getElementById('cliTelefono');
 if (inputTelefono) {
-    inputTelefono.addEventListener('input', function() {
-        this.value = this.value.replace(/\D/g, '').slice(0, 16);
+    inputTelefono.addEventListener('input', function () {
+        this.value = this.value.replace(/\D/g, '').slice(0, 7);
     });
 }
+
+const editInputTelefono = document.getElementById('editCliTelefono');
+if (editInputTelefono) {
+    editInputTelefono.addEventListener('input', function () {
+        this.value = this.value.replace(/\D/g, '').slice(0, 7);
+    });
+}
+// --- FIN: Lógica para autocompletar y formato de datos del cliente ---
 
 // --- NAVEGACIÓN MODULAR DINÁMICA ---
 const navButtons = document.querySelectorAll('.sidebar-menu .nav-btn');
@@ -130,39 +188,44 @@ function toggleSidebar() {
     document.body.classList.toggle('sidebar-visible');
 }
 
+let isNavigating = false;
+
 async function cargarVista(nombreVista) {
+    if (isNavigating) return;
+    isNavigating = true;
+
     const vista = vistas[nombreVista];
     if (!vista) {
-        visorModulos.innerHTML = `<div class="welcome-container"><h1>Error 404</h1><p>La vista "${nombreVista}" no fue encontrada.</p></div>`;
+        if (visorModulos) {
+            visorModulos.innerHTML = `<div class="welcome-container"><h1>Error 404</h1><p>La vista "${nombreVista}" no fue encontrada.</p></div>`;
+        }
+        isNavigating = false;
         return;
     }
 
     // 1. Iniciar la animación de desvanecimiento
-    visorModulos.classList.add('loading');
+    if (visorModulos) visorModulos.classList.add('loading');
 
     // 2. Esperar a que termine la animación de desvanecimiento
-    await new Promise(resolve => setTimeout(resolve, 200)); // Debe coincidir con la duración de la transición en CSS
+    await new Promise(resolve => setTimeout(resolve, 150)); // Debe coincidir con la duración de la transición en CSS
 
     try {
         const response = await fetch(`vistas/${vista.file}`);
         if (!response.ok) throw new Error(`No se pudo cargar ${vista.file}`);
-        
+
         const html = await response.text();
-        visorModulos.innerHTML = html;
+        if (visorModulos) visorModulos.innerHTML = html;
 
         // Inyectar el botón para mostrar/ocultar la barra lateral
-        const header = visorModulos.querySelector('header');
+        const header = visorModulos ? visorModulos.querySelector('header') : null;
         const toggleBtn = document.createElement('button');
         toggleBtn.className = 'sidebar-toggle-btn';
         toggleBtn.innerHTML = '&#9776;'; // Icono de hamburguesa
         toggleBtn.onclick = toggleSidebar;
 
         if (header) {
-            // Insertar el botón al principio del header, antes del título
             header.insertBefore(toggleBtn, header.firstChild);
-        } else {
-            // Si no hay header (ej. en la vista de 'inicio'), lo insertamos al principio
-            // del visor de módulos. El CSS se encargará de posicionarlo de forma absoluta.
+        } else if (visorModulos) {
             visorModulos.insertBefore(toggleBtn, visorModulos.firstChild);
         }
 
@@ -177,10 +240,13 @@ async function cargarVista(nombreVista) {
         }
     } catch (error) {
         console.error('Error al cargar la vista:', error);
-        visorModulos.innerHTML = `<div class="welcome-container"><h1>Error</h1><p>No se pudo cargar el módulo. Revisa la consola para más detalles.</p></div>`;
+        if (visorModulos) {
+            visorModulos.innerHTML = `<div class="welcome-container"><h1>Error</h1><p>No se pudo cargar el módulo. Revisa la consola para más detalles.</p></div>`;
+        }
     } finally {
         // 3. Quitar la clase para que el nuevo contenido aparezca con una animación de fundido
-        visorModulos.classList.remove('loading');
+        if (visorModulos) visorModulos.classList.remove('loading');
+        isNavigating = false;
     }
 }
 
@@ -195,36 +261,35 @@ navButtons.forEach(btn => {
 
 // --- LÓGICA DE LA APLICACIÓN (COPIADA Y ADAPTADA) ---
 
-// Conexión a Socket.io
-const socket = io();
-socket.on('connect', () => console.log('Conectado a Socket.IO'));
-socket.on('actualizacion-dato', (data) => {
-    // Recargar la vista actual si es relevante
-    const vistaActiva = document.querySelector('.nav-btn.active').textContent.trim().toLowerCase();
-    if (data.type === 'products' && (vistaActiva === 'inventario de productos' || vistaActiva === 'caja')) {
-        cargarVista(vistaActiva);
-    }
-    if (data.type === 'brands') {
-        if (document.getElementById('modalProducto').classList.contains('active')) {
-            loadExistingBrands();
+// Conexión a Socket.io protegida contra fallos
+const socket = (typeof io === 'function') ? io() : { on: () => { }, emit: () => { } };
+if (typeof socket.on === 'function') {
+    socket.on('connect', () => console.log('Conectado a Socket.IO'));
+    socket.on('actualizacion-dato', (data) => {
+        const activeNav = document.querySelector('.nav-btn.active');
+        if (!activeNav) return;
+        const vistaActiva = activeNav.textContent.trim().toLowerCase();
+        if (data.type === 'products' && (vistaActiva === 'inventario de productos' || vistaActiva === 'caja')) {
+            cargarVista(vistaActiva);
         }
-        if (vistaActiva === 'inventario de productos') loadProducts();
-    }
-    if (data.type === 'categories' && (vistaActiva === 'inventario de productos')) {
-        cargarVista(vistaActiva);
-    }
-    if (data.type === 'ventas' && vistaActiva === 'ventas') {
-        cargarVista(vistaActiva);
-    }
-    if (data.type === 'devoluciones' && vistaActiva === 'devoluciones') {
-        cargarVista(vistaActiva);
-    }
-});
-
-// Conexión a Supabase
-const SUPABASE_URL = 'https://tqlbmcqkottvclikpxur.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_Gq9mJ5Qo9MIa-k0pRTB7hQ_Rda5qtBX';
-const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        if (data.type === 'brands') {
+            const modalProd = document.getElementById('modalProducto');
+            if (modalProd && modalProd.classList.contains('active')) {
+                loadExistingBrands();
+            }
+            if (vistaActiva === 'inventario de productos') loadProducts();
+        }
+        if (data.type === 'categories' && (vistaActiva === 'inventario de productos')) {
+            cargarVista(vistaActiva);
+        }
+        if (data.type === 'ventas' && vistaActiva === 'ventas') {
+            cargarVista(vistaActiva);
+        }
+        if (data.type === 'devoluciones' && vistaActiva === 'devoluciones') {
+            cargarVista(vistaActiva);
+        }
+    });
+}
 
 // Variables de estado globales
 let productoSeleccionado = null;
@@ -239,8 +304,10 @@ let productosParaLlevar = [];
 let ventasCache = [];
 let oficialRate = 0, paraleloRate = 0;
 let totalVentaActual = 0; // Para almacenar el total de la venta actual en el modal
+let totalVentaEfectivo = 0; // Para almacenar el total de la venta en efectivo
 let reportCharts = {}; // Para almacenar instancias de los gráficos de reportes
 
+const BORRAR_PASS = 'DESTROID_DATA'; // Contraseña para acciones de borrado
 const TASA_SETTINGS_KEY = 'tasaSettings';
 const THEME_KEY = 'appTheme';
 let tasaSettings = {
@@ -248,39 +315,61 @@ let tasaSettings = {
     paralelo: { mode: 'automatico', value: 0 }
 };
 
+// Cargar ajustes de tasa desde localStorage al iniciar la aplicación
+const storedTasaSettings = localStorage.getItem(TASA_SETTINGS_KEY);
+if (storedTasaSettings) {
+    try {
+        tasaSettings = JSON.parse(storedTasaSettings);
+    } catch (e) {
+        console.error("Error al analizar los ajustes de tasa guardados:", e);
+    }
+}
+
 const METODOS_DE_PAGO = ['Pago Móvil', 'Binance', 'Dólares en efectivo', 'Bolívares en efectivo', 'Zelle'];
+
+// Helper para peticiones HTTP con timeout (evita bloqueos o congelamientos)
+async function fetchWithTimeout(url, options = {}, timeoutMs = 4000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(url, { ...options, signal: controller.signal });
+        return res;
+    } finally {
+        clearTimeout(timer);
+    }
+}
 
 // --- TASAS DE CAMBIO ---
 async function obtenerTasas() {
     const fetchOficial = async () => {
         if (tasaSettings.oficial.mode === 'manual' && tasaSettings.oficial.value > 0) return tasaSettings.oficial.value;
-        const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial');
+        const res = await fetchWithTimeout('https://ve.dolarapi.com/v1/dolares/oficial', {}, 4000);
         if (!res.ok) throw new Error('Fallo al obtener tasa oficial');
         const data = await res.json();
-        return data.promedio;
+        return parseFloat(data.promedio) || 0;
     };
 
     const fetchParalelo = async () => {
         if (tasaSettings.paralelo.mode === 'manual' && tasaSettings.paralelo.value > 0) return tasaSettings.paralelo.value;
-        const res = await fetch('https://ve.dolarapi.com/v1/dolares/paralelo');
+        const res = await fetchWithTimeout('https://ve.dolarapi.com/v1/dolares/paralelo', {}, 4000);
         if (!res.ok) throw new Error('Fallo al obtener tasa paralelo');
         const data = await res.json();
-        return data.promedio;
+        return parseFloat(data.promedio) || 0;
     };
 
     try {
         const [oficial, paralelo] = await Promise.all([fetchOficial(), fetchParalelo()]);
-        oficialRate = oficial;
-        paraleloRate = paralelo;
-
-        document.getElementById('sidebarBcvRate').textContent = `Bs ${oficialRate.toFixed(2)}`;
-        document.getElementById('sidebarParallelRate').textContent = `Bs ${paraleloRate.toFixed(2)}`;
+        if (oficial > 0) oficialRate = oficial;
+        if (paralelo > 0) paraleloRate = paralelo;
     } catch (error) {
-        console.error("Error obteniendo divisas:", error);
+        console.warn("Aviso al obtener tasas de cambio (usando respaldo):", error.message);
         if (!oficialRate) oficialRate = tasaSettings.oficial.value || 0;
         if (!paraleloRate) paraleloRate = tasaSettings.paralelo.value || 0;
-        document.getElementById('sidebarBcvRate').textContent = `Bs ${oficialRate.toFixed(2)}`;
-        document.getElementById('sidebarParallelRate').textContent = `Bs ${paraleloRate.toFixed(2)}`;
+    } finally {
+        const bcvEl = document.getElementById('sidebarBcvRate');
+        const parEl = document.getElementById('sidebarParallelRate');
+        if (bcvEl && oficialRate > 0) bcvEl.textContent = `Bs ${oficialRate.toFixed(2)}`;
+        if (parEl && paraleloRate > 0) parEl.textContent = `Bs ${paraleloRate.toFixed(2)}`;
     }
 }
 
@@ -289,27 +378,35 @@ async function obtenerTasas() {
 // INVENTARIO
 function initVistaInventario() {
     loadProducts();
-    document.getElementById('productSearch').addEventListener('input', (e) => {
+    document.getElementById('productSearch')?.addEventListener('input', (e) => {
         const term = e.target.value.toLowerCase().trim();
         if (!term) { renderProducts(productosCache); return; }
         renderProducts(productosCache.filter(p => p.nombre.toLowerCase().includes(term) || p.codigo.toLowerCase().includes(term)));
     });
-    document.getElementById('btnEditar').addEventListener('click', handleEditarProducto);
-    document.getElementById('btnEliminar').addEventListener('click', handleEliminarProducto);
-    document.getElementById('btnPrintInventory').addEventListener('click', async () => {
-        const btn = document.getElementById('btnPrintInventory');
-        const originalText = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = 'Generando PDF...';
-        try {
-            await generarInventarioPDF(productosCache);
-        } catch (error) {
-            console.error('Error al generar el PDF de inventario:', error);
-            showToast('No se pudo generar el PDF.', 'error');
-        } finally {
-            btn.disabled = false;
-            btn.textContent = originalText;
-        }
+
+    document.querySelectorAll('.inventory-edit-btn').forEach((btn) => {
+        btn.addEventListener('click', handleEditarProducto);
+    });
+
+    document.querySelectorAll('.inventory-delete-btn').forEach((btn) => {
+        btn.addEventListener('click', handleEliminarProducto);
+    });
+
+    document.querySelectorAll('.inventory-print-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Generando PDF...';
+            try {
+                await generarInventarioPDF(productosCache);
+            } catch (error) {
+                console.error('Error al generar el PDF de inventario:', error);
+                showToast('No se pudo generar el PDF.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        });
     });
 }
 
@@ -320,7 +417,7 @@ async function loadProducts() {
     await obtenerTasas();
     try {
         const { data: products, error } = await _supabase.from('productos').select('*').order('nombre');
-        
+
         if (error) {
             console.error('Supabase error loading productos:', error);
             container.innerHTML = `<p style="color: var(--btn-red);">Error cargando productos: ${error.message || JSON.stringify(error)}</p>`;
@@ -383,11 +480,36 @@ function renderProducts(productsToRender) {
     }
     let totalInvertido = 0, stockTotal = 0;
     productosCache.forEach(p => {
-        totalInvertido += p.cantidad * p.precio_costo_dolares_bcv;
-        stockTotal += p.cantidad;
+        totalInvertido += (p.cantidad || 0) * (p.precio_costo_dolares_bcv || 0);
+        stockTotal += (p.cantidad || 0);
     });
-    document.getElementById('totalInvertido').textContent = `$ ${formatCurrency(totalInvertido)}`;
-    document.getElementById('stockTotal').textContent = formatInteger(stockTotal);
+    const totalInvEl = document.getElementById('totalInvertido');
+    if (totalInvEl) totalInvEl.textContent = `$ ${formatCurrency(totalInvertido)}`;
+    const stockTotEl = document.getElementById('stockTotal');
+    if (stockTotEl) stockTotEl.textContent = formatInteger(stockTotal);
+}
+
+function calcularPreciosPorcentaje(precioProv, porcDesc, porcGanancia, rateOficial = oficialRate, rateParalelo = paraleloRate) {
+    const costoEfectivo = precioProv * (1 - (porcDesc / 100));
+    const ventaEfectivo = costoEfectivo * (1 + (porcGanancia / 100));
+    let costoUsdBcv = costoEfectivo;
+    let ventaUsdBcv = ventaEfectivo;
+
+    const pRate = (rateParalelo > 0) ? rateParalelo : (rateOficial > 0 ? rateOficial : 1);
+    const oRate = (rateOficial > 0) ? rateOficial : (rateParalelo > 0 ? rateParalelo : 1);
+
+    if (oRate > 0 && pRate > 0) {
+        const costoBsBcv = costoEfectivo * pRate;
+        costoUsdBcv = costoBsBcv / oRate;
+        ventaUsdBcv = costoUsdBcv * (1 + (porcGanancia / 100));
+    }
+
+    return {
+        costoEfectivo,
+        ventaEfectivo,
+        costoUsdBcv,
+        ventaUsdBcv
+    };
 }
 
 async function handleEditarProducto() {
@@ -428,27 +550,45 @@ async function handleEditarProducto() {
 
     document.getElementById('prodUbicacion').value = productoSeleccionado.ubicacion || '';
 
-    // Poblar el resto de los campos
+    // Poblar SIEMPRE los campos manuales de precios
+    document.getElementById('prodCostoDolaresBcv').value = productoSeleccionado.precio_costo_dolares_bcv ?? '';
+    document.getElementById('prodCostoDolaresEfectivo').value = productoSeleccionado.costo_$_efectivo ?? '';
+    document.getElementById('prodVentaDolaresBcv').value = productoSeleccionado.precio_venta_dolares_bcv ?? '';
+    document.getElementById('prodUsdt').value = productoSeleccionado.venta_$_efectivo ?? '';
+
+    // Poblar SIEMPRE los campos de la calculadora si existen o autocompletar con costo si no existen
+    const costoCalc = (productoSeleccionado.calc_costo_$_efectivo !== null && productoSeleccionado.calc_costo_$_efectivo !== undefined)
+        ? productoSeleccionado.calc_costo_$_efectivo
+        : (productoSeleccionado.costo_$_efectivo || productoSeleccionado.precio_costo_dolares_bcv || '');
+
+    document.getElementById('calcCostoUsdt').value = costoCalc;
+    document.getElementById('calcDescuento').value = (productoSeleccionado.calc_descuento !== null && productoSeleccionado.calc_descuento !== undefined) ? productoSeleccionado.calc_descuento : '';
+    document.getElementById('calcGanancia').value = (productoSeleccionado.calc_ganancia !== null && productoSeleccionado.calc_ganancia !== undefined) ? productoSeleccionado.calc_ganancia : '';
+
     const modo = productoSeleccionado.modo_creacion || 'manual';
+    const tieneDatosCalc = (productoSeleccionado.calc_costo_$_efectivo != null || productoSeleccionado.calc_descuento != null || productoSeleccionado.calc_ganancia != null);
+    const isCalcMode = (modo === 'calculator' || modo === 'calculadora' || tieneDatosCalc);
 
-    setProductModalMode(modo); // Cambia la UI directamente
-
-    if (modo === 'calculadora') {
-        // Poblar campos de la calculadora
-        document.getElementById('calcCostoUsdt').value = productoSeleccionado.calc_costo_usdt || 0;
-        document.getElementById('calcDescuento').value = productoSeleccionado.calc_descuento || 0;
-        document.getElementById('calcGanancia').value = productoSeleccionado.calc_ganancia || 0;
-
-        // Simular clic en 'Calcular Precios' para mostrar los resultados pre-calculados
-        // y dar contexto inmediato al usuario.
-        document.getElementById('btnCalcularPrecios').click();
-
-    } else { // modo 'manual'
-        // Poblar campos de precios manuales
-        document.getElementById('prodCostoDolaresBcv').value = productoSeleccionado.precio_costo_dolares_bcv;
-        document.getElementById('prodCostoDolaresEfectivo').value = productoSeleccionado.costo_$_efectivo;
-        document.getElementById('prodVentaDolaresBcv').value = productoSeleccionado.precio_venta_dolares_bcv;
-        document.getElementById('prodUsdt').value = productoSeleccionado.venta_$_efectivo;
+    if (isCalcMode && tieneDatosCalc) {
+        setProductModalMode('calculator');
+        const precioProv = parseFloat(document.getElementById('calcCostoUsdt').value) || 0;
+        const porcProv = parseFloat(document.getElementById('calcDescuento').value) || 0;
+        const porcVenta = parseFloat(document.getElementById('calcGanancia').value) || 0;
+        if (precioProv > 0) {
+            const calculados = calcularPreciosPorcentaje(precioProv, porcProv, porcVenta);
+            const resCostoEf = document.getElementById('resCostoEfectivo');
+            const resCostoBcv = document.getElementById('resCostoBcv');
+            const resVentaBcv = document.getElementById('resVentaBcv');
+            const resVentaEf = document.getElementById('resVentaUsdt');
+            const calcResults = document.getElementById('calculator-results');
+            if (resCostoEf) resCostoEf.textContent = `$ ${formatCurrency(calculados.costoEfectivo)}`;
+            if (resCostoBcv) resCostoBcv.textContent = `$ ${formatCurrency(calculados.costoUsdBcv)}`;
+            if (resVentaBcv) resVentaBcv.textContent = `$ ${formatCurrency(calculados.ventaUsdBcv)}`;
+            if (resVentaEf) resVentaEf.textContent = `$ ${formatCurrency(calculados.ventaEfectivo)}`;
+            if (calcResults) calcResults.style.display = 'block';
+        }
+    } else {
+        setProductModalMode('manual');
     }
 
     // Finalmente, mostrar el modal
@@ -478,49 +618,56 @@ async function initVistaCaja() {
     // Asignar IDs para estilos específicos
     if (accordions.length > 0) accordions[0].id = 'header-disponibles';
     if (accordions.length > 1) accordions[1].id = 'header-cargados';
-    
+
     // Abrir el primer acordeón ('Productos Disponibles') por defecto.
     accordions.forEach((acc, index) => {
         const content = acc.nextElementSibling;
-        const icon = acc.querySelector('.accordion-icon');
         if (index === 0) {
+            acc.classList.add('active');
             content.classList.add('active');
-            content.style.maxHeight = content.scrollHeight + 'px';
-            icon.textContent = '▲';
+            content.style.maxHeight = (content.scrollHeight + 100) + 'px';
         } else {
+            acc.classList.remove('active');
             content.classList.remove('active');
             content.style.maxHeight = null;
-            icon.textContent = '▼';
         }
     });
 
     accordions.forEach(clickedAccordion => {
         clickedAccordion.addEventListener('click', () => {
             const content = clickedAccordion.nextElementSibling;
-            
+
             // Si ya está activo, no hacer nada.
             if (content.classList.contains('active')) return;
 
             // Cerrar todos los demás acordeones
             accordions.forEach(acc => {
                 const otherContent = acc.nextElementSibling;
+                acc.classList.remove('active');
                 otherContent.classList.remove('active');
                 otherContent.style.maxHeight = null;
-                acc.querySelector('.accordion-icon').textContent = '▼';
             });
 
             // Abrir el que se clickeó
+            clickedAccordion.classList.add('active');
             content.classList.add('active');
-            content.style.maxHeight = content.scrollHeight + 'px';
-            clickedAccordion.querySelector('.accordion-icon').textContent = '▲';
+            content.style.maxHeight = (content.scrollHeight + 100) + 'px';
         });
     });
+
+    // Añadir clase para animar la entrada de botones en móvil (efecto 'bajar')
+    const cajaActionsEl = document.querySelector('.caja-actions');
+    if (cajaActionsEl) {
+        cajaActionsEl.classList.add('responsive-animate');
+        // activar la clase 'loaded' en el siguiente tick para disparar la transición
+        requestAnimationFrame(() => setTimeout(() => cajaActionsEl.classList.add('loaded'), 50));
+    }
     // --- FIN: Nueva lógica de acordeón dinámico con animación ---
 
-    document.getElementById('cajaProductSearch').addEventListener('input', (e) => {
+    document.getElementById('cajaProductSearch')?.addEventListener('input', (e) => {
         const term = e.target.value.toLowerCase().trim();
-        const filteredProducts = productosCache.filter(p => 
-            p.nombre.toLowerCase().includes(term) || 
+        const filteredProducts = productosCache.filter(p =>
+            p.nombre.toLowerCase().includes(term) ||
             p.codigo.toLowerCase().includes(term)
         );
         renderCajaProductos(filteredProducts);
@@ -537,9 +684,9 @@ function renderCajaProductos(productsToRender) {
     const container = document.getElementById('cajaProductosDisponibles');
     if (!container) return;
 
-    if (!productsToRender || productsToRender.length === 0) { 
-        container.innerHTML = '<p style="color: var(--text-muted); padding: 10px;">No se encontraron productos.</p>'; 
-        return; 
+    if (!productsToRender || productsToRender.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-muted); padding: 10px;">No se encontraron productos.</p>';
+        return;
     }
 
     // Agrupar productos por categoría
@@ -565,7 +712,7 @@ function renderCajaProductos(productsToRender) {
                         <span>${p.nombre}</span>
                     </div>
                     <div class="caja-v-item">
-                        <label>Precio Bs (BCV)</label>
+                        <label>Precio de venta Bs (BCV)</label>
                         <span style="color: var(--text-primary); font-weight: bold;">${precioVentaBsBcv}</span>
                     </div>
                     <div class="caja-v-item">
@@ -632,16 +779,18 @@ function renderizarParaLlevar() {
     const totalArticulosEl = document.getElementById('cajaTotalArticulos');
     const totalBcvEl = document.getElementById('cajaTotalBcv');
     const totalBcvBsEl = document.getElementById('cajaTotalBcvBs');
+    const totalEfectivoEl = document.getElementById('cajaTotalEfectivoUsd');
 
     if (productosParaLlevar.length === 0) {
         container.innerHTML = '<p style="color: var(--text-muted); padding: 10px;">No hay productos en el carrito.</p>';
         if (totalArticulosEl) totalArticulosEl.textContent = '0';
         if (totalBcvEl) totalBcvEl.textContent = '$ 0.00';
         if (totalBcvBsEl) totalBcvBsEl.textContent = 'Bs 0.00';
+        if (totalEfectivoEl) totalEfectivoEl.textContent = '$ 0.00';
         return;
     }
 
-    let totalArticulos = 0, totalBcv = 0;
+    let totalArticulos = 0, totalBcv = 0, totalEfectivo = 0;
     productosParaLlevar.forEach(item => {
         // CORRECCIÓN: Usar precio_venta_dolares_bcv en lugar de precio_usdt
         const subtotalDolaresBcv = item.precio_venta_dolares_bcv * item.cantidadLlevar;
@@ -650,6 +799,7 @@ function renderizarParaLlevar() {
 
         totalArticulos += item.cantidadLlevar;
         totalBcv += subtotalDolaresBcv;
+        totalEfectivo += subtotalDolaresEfectivo;
         const card = document.createElement('div');
         card.className = 'product-card-caja-list'; // Usar la misma clase de lista
         card.innerHTML = `
@@ -685,6 +835,7 @@ function renderizarParaLlevar() {
     if (totalArticulosEl) totalArticulosEl.textContent = formatInteger(totalArticulos);
     if (totalBcvEl) totalBcvEl.textContent = `$ ${formatCurrency(totalBcv)}`;
     if (totalBcvBsEl) totalBcvBsEl.textContent = `Bs ${formatCurrency(totalBcvBs)}`;
+    if (totalEfectivoEl) totalEfectivoEl.textContent = `$ ${formatCurrency(totalEfectivo)}`;
 }
 
 function actualizarCantidadLlevar(codigo, val) {
@@ -702,6 +853,111 @@ function quitarDeParaLlevar(codigo) {
     renderizarParaLlevar();
 }
 
+/**
+ * Calcula los tres montos de visualización para una venta o devolución
+ * (Total USD BCV, Total BS BCV, Total USD Efectivo) con lógica consistente.
+ */
+function calcularTotalesVenta(v) {
+    const metodosEnEfectivo = ['Binance', 'Dólares en efectivo', 'Zelle'];
+    const metodosEnBolivares = ['Pago Móvil', 'Bolívares en efectivo'];
+
+    let pagos = [];
+    try {
+        const rawPagos = typeof v.tipo_pago === 'string' ? JSON.parse(v.tipo_pago) : v.tipo_pago;
+        if (Array.isArray(rawPagos)) {
+            pagos = rawPagos;
+        }
+    } catch (e) { }
+
+    let sumBs = 0;
+    let sumUsdEfectivo = 0;
+
+    const totalUsd = parseFloat(v.total_usd || v.totalUsd || 0);
+    const totalBs = parseFloat(v.total_bs || v.totalBs || 0);
+    const saleRate = (totalUsd > 0 && totalBs > 0) ? (totalBs / totalUsd) : oficialRate;
+
+    pagos.forEach(p => {
+        const isBs = p.moneda === 'BS' || metodosEnBolivares.includes(p.metodo);
+        if (isBs) {
+            let valBs = 0;
+            if (p.monto_original !== undefined && p.monto_original !== null && !isNaN(parseFloat(p.monto_original))) {
+                valBs = parseFloat(p.monto_original);
+            } else if (p.monto !== undefined && p.monto !== null && !isNaN(parseFloat(p.monto))) {
+                valBs = parseFloat(p.monto) * saleRate;
+            }
+            sumBs += valBs;
+        } else {
+            let valUsd = 0;
+            if (p.monto_original !== undefined && p.monto_original !== null && !isNaN(parseFloat(p.monto_original))) {
+                valUsd = parseFloat(p.monto_original);
+            } else if (p.monto !== undefined && p.monto !== null && !isNaN(parseFloat(p.monto))) {
+                valUsd = parseFloat(p.monto);
+            }
+            sumUsdEfectivo += valUsd;
+        }
+    });
+
+    let totalUsdBcvDisplay = '$ 0.00';
+    let totalBsBcvDisplay = 'Bs 0.00';
+    let totalUsdEfectivoDisplay = '$ 0.00';
+
+    const hasBs = sumBs > 0.0001;
+    const hasEfectivo = sumUsdEfectivo > 0.0001;
+
+    if (hasEfectivo && !hasBs) {
+        // Si el pago fue 100% en divisas / efectivo
+        totalUsdEfectivoDisplay = `$ ${formatCurrency(sumUsdEfectivo || totalUsd)}`;
+    } else if (hasBs && !hasEfectivo) {
+        // Si el pago fue 100% en bolívares (BCV)
+        totalUsdBcvDisplay = `$ ${formatCurrency(totalUsd)}`;
+        totalBsBcvDisplay = `Bs ${formatCurrency(sumBs || totalBs || (totalUsd * saleRate))}`;
+    } else if (hasEfectivo && hasBs) {
+        // Si el pago fue mixto:
+        // Columna Total BS (BCV) muestra EXACTAMENTE la parte pagada en bolívares
+        // Columna Total USD (Efectivo) muestra EXACTAMENTE el restante pagado en divisas/efectivo
+        totalBsBcvDisplay = `Bs ${formatCurrency(sumBs)}`;
+        totalUsdEfectivoDisplay = `$ ${formatCurrency(sumUsdEfectivo)}`;
+    } else {
+        // Fallback para ventas sin desglose detallado
+        const tipoPagoStr = typeof v.tipo_pago === 'string' ? v.tipo_pago : JSON.stringify(v.tipo_pago || '');
+        const pagoEnEfectivoLegacy = pagos.some(p => metodosEnEfectivo.includes(p.metodo)) || metodosEnEfectivo.some(m => tipoPagoStr.includes(m));
+        if (pagoEnEfectivoLegacy) {
+            totalUsdEfectivoDisplay = `$ ${formatCurrency(totalUsd)}`;
+        } else {
+            totalUsdBcvDisplay = `$ ${formatCurrency(totalUsd)}`;
+            totalBsBcvDisplay = `Bs ${formatCurrency(totalBs || (totalUsd * saleRate))}`;
+        }
+    }
+
+    return { totalUsdBcvDisplay, totalBsBcvDisplay, totalUsdEfectivoDisplay, pagos, sumBs, sumUsdEfectivo };
+}
+
+/**
+ * Genera el HTML de los badges de métodos de pago con montos formateados.
+ */
+function formatTipoPagoBadges(tipoPagoRaw, totalBs = 0, totalUsd = 1) {
+    let pagos = [];
+    try {
+        const parsedPagos = typeof tipoPagoRaw === 'string' ? JSON.parse(tipoPagoRaw) : tipoPagoRaw;
+        if (Array.isArray(parsedPagos) && parsedPagos.length > 0) {
+            pagos = parsedPagos;
+            const rate = (parseFloat(totalBs) > 0 && parseFloat(totalUsd) > 0) ? (parseFloat(totalBs) / parseFloat(totalUsd)) : oficialRate;
+            const pagosHtml = pagos.map(p => {
+                const isBs = p.moneda === 'BS' || ['Pago Móvil', 'Bolívares en efectivo'].includes(p.metodo);
+                let displayMonto = '';
+                if (p.monto_original !== undefined && p.monto_original !== null && !isNaN(parseFloat(p.monto_original))) {
+                    displayMonto = isBs ? `Bs ${formatCurrency(parseFloat(p.monto_original))}` : `$ ${formatCurrency(parseFloat(p.monto_original))}`;
+                } else if (p.monto !== undefined && p.monto !== null && !isNaN(parseFloat(p.monto))) {
+                    displayMonto = isBs ? `Bs ${formatCurrency(parseFloat(p.monto) * rate)}` : `$ ${formatCurrency(parseFloat(p.monto))}`;
+                }
+                return `<span class="detalle-venta-badge" style="white-space: nowrap;">${p.metodo}${displayMonto ? ': ' + displayMonto : ''}</span>`;
+            }).join('');
+            return `<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">${pagosHtml}</div>`;
+        }
+    } catch (e) { }
+    return `<span class="detalle-venta-badge">${tipoPagoRaw || 'N/A'}</span>`;
+}
+
 // VENTAS
 function initVistaVentas() {
     // Reemplazar la tabla estática por un contenedor para el acordeón dinámico
@@ -714,16 +970,16 @@ function initVistaVentas() {
     }
 
     cargarHistorialVentas();
-    document.getElementById('ventasSearch').addEventListener('input', (e) => {
+    document.getElementById('ventasSearch')?.addEventListener('input', (e) => {
         const term = e.target.value.toLowerCase().trim();
         if (!term) { renderizarTablaVentas(ventasCache); return; }
         const filtradas = ventasCache.filter(v => {
             const matchNombre = v.cliente_nombre.toLowerCase().includes(term);
             const matchId = v.id.toString().includes(term);
             const matchFecha = new Date(v.fecha).toLocaleString().toLowerCase().includes(term);
-        const matchDetalle = v.detalles?.some(d => d.producto_nombre.toLowerCase().includes(term) || d.producto_codigo.toLowerCase().includes(term));
-        const matchPago = typeof v.tipo_pago === 'string' && v.tipo_pago.toLowerCase().includes(term);
-        return matchNombre || matchId || matchFecha || matchDetalle || matchPago;
+            const matchDetalle = v.detalles?.some(d => d.producto_nombre.toLowerCase().includes(term) || d.producto_codigo.toLowerCase().includes(term));
+            const matchPago = typeof v.tipo_pago === 'string' && v.tipo_pago.toLowerCase().includes(term);
+            return matchNombre || matchId || matchFecha || matchDetalle || matchPago;
         });
         renderizarTablaVentas(filtradas);
     });
@@ -756,8 +1012,10 @@ function renderizarTablaVentas(listaVentas) {
 
     if (listaVentas.length === 0) {
         container.innerHTML = `<p style="color: var(--text-muted); padding: 20px; text-align: center;">No hay ventas que coincidan con la búsqueda.</p>`;
-        document.getElementById('totalVentasCount').textContent = '0';
-        document.getElementById('totalVentasUsd').textContent = '$ 0.00';
+        const countEl = document.getElementById('totalVentasCount');
+        if (countEl) countEl.textContent = '0';
+        const usdEl = document.getElementById('totalVentasUsd');
+        if (usdEl) usdEl.textContent = '$ 0.00';
         return;
     }
 
@@ -797,17 +1055,32 @@ function renderizarTablaVentas(listaVentas) {
         monthContent.className = 'venta-month-content';
 
         // Expandir el primer mes (el más reciente) por defecto
-        if (monthIndex > 0) {
-            monthContent.style.display = 'none';
-        } else {
+        if (monthIndex === 0) {
             monthHeader.classList.add('active');
-            monthHeader.querySelector('.fecha-icono').textContent = '▲';
+            monthContent.classList.add('active');
+            monthContent.style.maxHeight = 'none';
+        } else {
+            monthContent.classList.remove('active');
+            monthContent.style.maxHeight = '0px';
         }
 
         monthHeader.addEventListener('click', () => {
             const isActive = monthHeader.classList.toggle('active');
-            monthContent.style.display = isActive ? 'block' : 'none';
-            monthHeader.querySelector('.fecha-icono').textContent = isActive ? '▲' : '▼';
+            if (isActive) {
+                monthContent.classList.add('active');
+                monthContent.style.maxHeight = (monthContent.scrollHeight + 500) + 'px';
+                setTimeout(() => {
+                    if (monthHeader.classList.contains('active')) {
+                        monthContent.style.maxHeight = 'none';
+                    }
+                }, 400);
+            } else {
+                monthContent.style.maxHeight = monthContent.scrollHeight + 'px';
+                requestAnimationFrame(() => {
+                    monthContent.classList.remove('active');
+                    monthContent.style.maxHeight = '0px';
+                });
+            }
         });
 
         // 3. Agrupar ventas del mes por día
@@ -823,7 +1096,7 @@ function renderizarTablaVentas(listaVentas) {
         // 4. Renderizar acordeón de días dentro del mes
         sortedDays.forEach((diaKey, dayIndex) => {
             const ventasDelDia = ventasPorDia[diaKey];
-            const fechaFormateada = new Date(ventasDelDia[0].fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+            const fechaFormateada = new Date(ventasDelDia[0].fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric' });
             const totalVentasDia = ventasDelDia.length;
             const totalUsdDia = ventasDelDia.reduce((sum, v) => sum + (parseFloat(v.total_usd || 0)), 0);
 
@@ -846,15 +1119,30 @@ function renderizarTablaVentas(listaVentas) {
             // Expandir el primer día del primer mes por defecto
             if (monthIndex === 0 && dayIndex === 0) {
                 dayHeader.classList.add('active');
-                dayHeader.querySelector('.fecha-icono').textContent = '▲';
+                dayContent.classList.add('active');
+                dayContent.style.maxHeight = 'none';
             } else {
-                dayContent.style.display = 'none';
+                dayContent.classList.remove('active');
+                dayContent.style.maxHeight = '0px';
             }
 
             dayHeader.addEventListener('click', () => {
                 const isActive = dayHeader.classList.toggle('active');
-                dayContent.style.display = isActive ? 'block' : 'none';
-                dayHeader.querySelector('.fecha-icono').textContent = isActive ? '▲' : '▼';
+                if (isActive) {
+                    dayContent.classList.add('active');
+                    dayContent.style.maxHeight = (dayContent.scrollHeight + 150) + 'px';
+                    setTimeout(() => {
+                        if (dayHeader.classList.contains('active')) {
+                            dayContent.style.maxHeight = 'none';
+                        }
+                    }, 380);
+                } else {
+                    dayContent.style.maxHeight = dayContent.scrollHeight + 'px';
+                    requestAnimationFrame(() => {
+                        dayContent.classList.remove('active');
+                        dayContent.style.maxHeight = '0px';
+                    });
+                }
             });
 
             const table = document.createElement('table');
@@ -862,8 +1150,8 @@ function renderizarTablaVentas(listaVentas) {
             table.innerHTML = `
                 <thead>
                     <tr>
-                        <th>ID</th><th>Hora</th><th>Cliente</th><th>Cédula</th><th>Teléfono</th>
-                        <th>Tipo Pago</th><th>Productos</th><th>Total USD</th><th>Total BS</th><th>Acciones</th>
+                        <th>ID</th><th>Hora</th><th>Cliente</th><th>WhatsApp</th><th>Cédula</th><th>Teléfono</th>
+                        <th>Tipo Pago</th><th>Productos</th><th>Total USD (BCV)</th><th>Total BS (BCV)</th><th>Total USD (Efectivo)</th><th>Acciones</th>
                     </tr>
                 </thead>
                 <tbody></tbody>`;
@@ -880,7 +1168,7 @@ function renderizarTablaVentas(listaVentas) {
                         detallesAgrupados[key] = { ...d, cantidad: parseInt(d.cantidad, 10) || 0 };
                     }
                 });
-                
+
                 const totalProductosUnicos = Object.keys(detallesAgrupados).length;
                 let productosHtml;
 
@@ -895,21 +1183,26 @@ function renderizarTablaVentas(listaVentas) {
                     productosHtml = '<span class="detalle-venta-badge">Sin productos</span>';
                 }
 
-                let tipoPagoHtml = '';
-                try {
-                    const pagos = JSON.parse(v.tipo_pago);
-                    if (Array.isArray(pagos) && pagos.length > 0) {
-                        // Crear una lista vertical de métodos de pago sin montos
-                        const pagosHtml = pagos.map(p => `<span class="detalle-venta-badge">Tipo de pago: ${p.metodo}</span>`).join('');
-                        tipoPagoHtml = `<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">${pagosHtml}</div>`;
-                    } else { throw new Error("No es un array"); }
-                } catch (e) {
-                    tipoPagoHtml = `<span class="detalle-venta-badge">Tipo de pago: ${v.tipo_pago || 'N/A'}</span>`;
-                }
+                let pagos = []; // Definir fuera del try para que sea accesible
+                const tipoPagoHtml = formatTipoPagoBadges(v.tipo_pago, v.total_bs, v.total_usd);
+                const { totalUsdBcvDisplay, totalBsBcvDisplay, totalUsdEfectivoDisplay } = calcularTotalesVenta(v);
 
                 let statusBadge = '';
                 if (v.estado_pago === 'pendiente') {
                     statusBadge = `<br><span class="detalle-venta-badge" style="background-color: var(--btn-orange); color: white; font-weight: bold;">DEBE</span>`;
+                }
+
+                let whatsappButtonHtml = '';
+                if (v.cliente_telefono && v.cliente_telefono.trim() !== '') {
+                    const cleanedPhone = formatTelefonoWhatsApp(v.cliente_telefono);
+                    if (cleanedPhone.length >= 12 && cleanedPhone.startsWith('58')) {
+                        const message = `Hola ${v.cliente_nombre} esta es tu factura`;
+                        const whatsappUrl = `https://wa.me/${cleanedPhone}?text=${encodeURIComponent(message)}`;
+                        whatsappButtonHtml = `
+                            <a href="${whatsappUrl}" target="_blank" class="btn-whatsapp" title="Enviar WhatsApp a ${v.cliente_nombre}">
+                                <img src="/imagen/what.png" alt="WhatsApp">
+                            </a>`;
+                    }
                 }
 
                 const tr = document.createElement('tr');
@@ -917,19 +1210,21 @@ function renderizarTablaVentas(listaVentas) {
                     <td style="font-weight: bold; color: var(--btn-yellow);">#${v.id}</td>
                     <td>${horaFormateada}</td>
                     <td>${v.cliente_nombre}${statusBadge}</td>
+                    <td>${whatsappButtonHtml}</td>
                     <td>${v.cliente_cedula}</td>
                     <td>${v.cliente_telefono}</td>
                     <td>${tipoPagoHtml}</td>
                     <td>${productosHtml}</td>
-                    <td style="font-weight: bold;">$ ${formatCurrency(parseFloat(v.total_usd))}</td>
-                    <td style="font-weight: bold;">Bs ${formatCurrency(parseFloat(v.total_bs))}</td>`;
-                
+                    <td style="font-weight: bold;">${totalUsdBcvDisplay}</td>
+                    <td style="font-weight: bold;">${totalBsBcvDisplay}</td>
+                    <td style="font-weight: bold; color: var(--btn-orange);">${totalUsdEfectivoDisplay}</td>`;
+
                 let accionesHtml = `<button class="btn-pdf venta-accion-btn" data-venta-id="${v.id}">PDF</button>`;
                 if (v.estado_pago === 'pendiente') {
                     accionesHtml += `<button class="action-btn btn-blue btn-abonar-venta venta-accion-btn" data-venta-id="${v.id}">Abonar</button>`;
                 }
-                accionesHtml += `<button class="btn-edit-venta venta-accion-btn" data-venta-id="${v.id}">Editar</button><button class="action-btn btn-del btn-delete-venta venta-accion-btn" data-venta-id="${v.id}">Eliminar</button>`;                
-                rowsHtml.push(`<tr>${tr.innerHTML}<td class="venta-acciones">${accionesHtml}</td></tr>`);
+                accionesHtml += `<button class="btn-edit-venta venta-accion-btn" data-venta-id="${v.id}">Editar</button><button class="action-btn btn-del btn-delete-venta venta-accion-btn" data-venta-id="${v.id}">Eliminar</button>`;
+                rowsHtml.push(`<tr>${tr.innerHTML}<td class="celda-acciones"><div class="venta-acciones">${accionesHtml}</div></td></tr>`);
             });
             tbody.innerHTML = rowsHtml.join(''); // Asignar todas las filas de una vez
             dayContent.appendChild(table);
@@ -944,8 +1239,10 @@ function renderizarTablaVentas(listaVentas) {
     });
 
     const sumaTotalUsd = listaVentas.reduce((sum, v) => sum + (parseFloat(v.total_usd || 0)), 0);
-    document.getElementById('totalVentasCount').textContent = formatInteger(listaVentas.length);
-    document.getElementById('totalVentasUsd').textContent = `$ ${formatCurrency(sumaTotalUsd)}`;
+    const countEl = document.getElementById('totalVentasCount');
+    if (countEl) countEl.textContent = formatInteger(listaVentas.length);
+    const totalUsdEl = document.getElementById('totalVentasUsd');
+    if (totalUsdEl) totalUsdEl.textContent = `$ ${formatCurrency(sumaTotalUsd)}`;
 }
 
 async function _deleteSaleAndRestoreStock(ventaParaEliminar) {
@@ -1008,7 +1305,7 @@ async function handleDeleteSale(ventaId) {
             await _deleteSaleAndRestoreStock(ventaParaEliminar);
 
             showToast(`Venta #${ventaId} eliminada y stock restaurado.`, 'success');
-            
+
             cargarHistorialVentas();
             socket.emit('cambio-dato', { type: 'ventas' });
             socket.emit('cambio-dato', { type: 'products' });
@@ -1031,31 +1328,71 @@ function handleAbrirModalDetallesVenta(ventaId) {
     document.getElementById('detallesVentaIdDisplay').textContent = `#${venta.id}`;
 
     const detallesContainer = document.getElementById('detallesVentaProductos');
-    
-    const detallesAgrupados = {};
-    venta.detalles.forEach(d => {
-        const key = d.producto_codigo || d.producto_nombre;
-        if (detallesAgrupados[key]) {
-            detallesAgrupados[key].cantidad += parseInt(d.cantidad, 10) || 0;
-        } else {
-            detallesAgrupados[key] = { ...d, cantidad: parseInt(d.cantidad, 10) || 0 };
-        }
-    });
 
-    if (Object.keys(detallesAgrupados).length > 0) {
-        // Usar un estilo de lista más limpio
-        detallesContainer.innerHTML = '<ul style="list-style-type: none; padding-left: 0; margin: 0;">' + 
-            Object.values(detallesAgrupados).map(d => 
-                `<li style="padding: 6px 0; border-bottom: 1px solid var(--border-color);">
-                    <strong>${d.producto_nombre}</strong> (x${d.cantidad})
-                 </li>`
-            ).join('') + 
-        '</ul>';
-        // Quitar el borde del último elemento
-        detallesContainer.querySelector('li:last-child').style.borderBottom = 'none';
-    } else {
-        detallesContainer.innerHTML = 'No hay detalles de productos para esta venta.';
+    const detallesAgrupados = {};
+    if (venta.detalles && Array.isArray(venta.detalles)) {
+        venta.detalles.forEach(d => {
+            const key = d.producto_codigo || d.producto_nombre;
+            if (detallesAgrupados[key]) {
+                detallesAgrupados[key].cantidad += parseInt(d.cantidad, 10) || 0;
+            } else {
+                detallesAgrupados[key] = { ...d, cantidad: parseInt(d.cantidad, 10) || 0 };
+            }
+        });
     }
+
+    let productosListHtml = '';
+    if (Object.keys(detallesAgrupados).length > 0) {
+        productosListHtml = '<ul style="list-style-type: none; padding-left: 0; margin: 0;">' +
+            Object.values(detallesAgrupados).map(d =>
+                `<li style="padding: 6px 0; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between;">
+                    <span><strong>${d.producto_nombre}</strong> (x${d.cantidad})</span>
+                    <span style="color: var(--text-muted);">$ ${formatCurrency(d.precio_unitario * d.cantidad)}</span>
+                 </li>`
+            ).join('') +
+            '</ul>';
+    } else {
+        productosListHtml = '<p style="color: var(--text-muted); margin: 0;">No hay detalles de productos para esta venta.</p>';
+    }
+
+    let pagosBreakdownHtml = '';
+    try {
+        const parsedPagos = JSON.parse(venta.tipo_pago);
+        if (Array.isArray(parsedPagos) && parsedPagos.length > 0) {
+            const itemsHtml = parsedPagos.map(p => {
+                const isBs = p.moneda === 'BS' || ['Pago Móvil', 'Bolívares en efectivo'].includes(p.metodo);
+                let montoStr = '';
+                if (p.monto_original !== undefined && p.monto_original !== null && !isNaN(parseFloat(p.monto_original))) {
+                    montoStr = isBs ? `Bs ${formatCurrency(parseFloat(p.monto_original))}` : `$ ${formatCurrency(parseFloat(p.monto_original))}`;
+                } else if (p.monto !== undefined && p.monto !== null && !isNaN(parseFloat(p.monto))) {
+                    const saleBs = parseFloat(venta.total_bs) || 0;
+                    const saleUsd = parseFloat(venta.total_usd) || 1;
+                    const rate = saleBs > 0 ? (saleBs / saleUsd) : oficialRate;
+                    montoStr = isBs ? `Bs ${formatCurrency(parseFloat(p.monto) * rate)}` : `$ ${formatCurrency(parseFloat(p.monto))}`;
+                }
+                return `<li style="padding: 4px 0; display: flex; justify-content: space-between;">
+                    <span style="font-weight: 500;">${p.metodo}</span>
+                    <span style="font-weight: bold; color: ${isBs ? 'var(--btn-blue)' : 'var(--btn-green)'};">${montoStr}</span>
+                </li>`;
+            }).join('');
+            pagosBreakdownHtml = `
+                <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                    <div style="font-weight: 600; margin-bottom: 6px; color: var(--text-color);">Desglose de Pago:</div>
+                    <ul style="list-style-type: none; padding-left: 0; margin: 0;">${itemsHtml}</ul>
+                    <div style="display: flex; justify-content: space-between; margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border-color); font-size: 0.85rem;">
+                        <span>Total Venta USD: <strong>$ ${formatCurrency(parseFloat(venta.total_usd || 0))}</strong></span>
+                        <span>Total Venta BS: <strong>Bs ${formatCurrency(parseFloat(venta.total_bs || 0))}</strong></span>
+                    </div>
+                </div>
+            `;
+        }
+    } catch (e) { /* no-op */ }
+
+    detallesContainer.innerHTML = `
+        <div style="font-weight: 600; margin-bottom: 8px; color: var(--text-color);">Productos:</div>
+        ${productosListHtml}
+        ${pagosBreakdownHtml}
+    `;
 
     modal.classList.add('active');
 }
@@ -1098,7 +1435,7 @@ async function handleAbrirModalAbono(ventaId) {
     const metodosEnBolivares = ['Pago Móvil', 'Bolívares en efectivo'];
     const paymentContainer = document.getElementById('abonoPaymentMethodsContainer');
     paymentContainer.innerHTML = METODOS_DE_PAGO.map(metodo => {
-        const id = `abono_${metodo.toLowerCase().replace(/ /g, '_').replace('ó','o')}`;
+        const id = `abono_${metodo.toLowerCase().replace(/ /g, '_').replace('ó', 'o')}`;
         const isBsMethod = metodosEnBolivares.includes(metodo);
         const currencyLabel = isBsMethod ? 'Bs' : '$';
         const placeholderText = `Monto en ${currencyLabel}`;
@@ -1116,11 +1453,11 @@ async function handleAbrirModalAbono(ventaId) {
             </div>
         `;
     }).join('');
-    
+
     // Resetear el estado del formulario
     const form = document.getElementById('formAbonoVenta');
     form.reset();
-    
+
     // Añadir listeners para este modal
     const updateAbonoHandler = () => updateAbonoSummary(totalDeLaVenta, totalYaPagado);
     form.querySelectorAll('.abono-payment-amount-input').forEach(input => {
@@ -1154,14 +1491,17 @@ function updateAbonoSummary(totalDeLaVenta, totalYaPagado) {
             }
             return sum;
         }, 0);
-    
+
     nuevoAbonoUsd = parseFloat(nuevoAbonoUsd.toFixed(2));
     const faltanteFinal = totalDeLaVenta - totalYaPagado - nuevoAbonoUsd;
 
-    document.getElementById('abonoNuevoTotalBs').textContent = `Bs ${formatCurrency(nuevoAbonoUsd * oficialRate)}`;
-    document.getElementById('abonoNuevoTotal').textContent = `$ ${formatCurrency(nuevoAbonoUsd)}`;
-    
+    const abonoBsEl = document.getElementById('abonoNuevoTotalBs');
+    if (abonoBsEl) abonoBsEl.textContent = `Bs ${formatCurrency(nuevoAbonoUsd * oficialRate)}`;
+    const abonoUsdEl = document.getElementById('abonoNuevoTotal');
+    if (abonoUsdEl) abonoUsdEl.textContent = `$ ${formatCurrency(nuevoAbonoUsd)}`;
+
     const btnConfirmar = document.getElementById('btnConfirmarAbono');
+    if (!btnConfirmar) return;
 
     if (faltanteFinal < -0.01) { // Se pagó de más
         btnConfirmar.disabled = true;
@@ -1206,7 +1546,7 @@ async function handleConfirmarAbono(e) {
             if (amountInUsd > 0) {
                 nuevosPagos.push({
                     metodo: amountInput.dataset.methodName,
-                    monto: parseFloat(amountInUsd.toFixed(2))
+                    monto: amountInUsd
                 });
             }
         });
@@ -1221,7 +1561,7 @@ async function handleConfirmarAbono(e) {
             .select('total_usd, tipo_pago')
             .eq('id', ventaId)
             .single();
-        
+
         if (fetchError) throw fetchError;
 
         // 3. Fusionar pagos
@@ -1269,59 +1609,87 @@ async function handleConfirmarAbono(e) {
 }
 
 function updateEditPaymentSummary() {
-    const totalVenta = parseFloat(document.getElementById('editVentaTotalUsd').value) || 0;
-    if (totalVenta === 0) return;
+    const totalBcvAmount = parseFloat(document.getElementById('editVentaTotalUsd').value) || 0;
+    const totalEfectivoAmount = parseFloat(document.getElementById('editVentaTotalEfectivo')?.value) || 0;
+    if (totalBcvAmount === 0 && totalEfectivoAmount === 0) return;
+
+    const activeMethodNames = [];
+    document.querySelectorAll('#editPaymentMethodsContainer input[type="checkbox"]:checked').forEach(check => {
+        const id = check.dataset.editMethodId;
+        const amountInput = document.getElementById(`amount_${id}`);
+        if (amountInput) {
+            activeMethodNames.push(amountInput.dataset.methodName);
+        }
+    });
+
+    const metodosEnEfectivo = ['Binance', 'Dólares en efectivo', 'Zelle'];
+    const useEfectivoTotal = activeMethodNames.some(name => metodosEnEfectivo.includes(name));
+    const currentRate = useEfectivoTotal ? ((paraleloRate > 0) ? paraleloRate : (oficialRate > 0 ? oficialRate : 1)) : ((oficialRate > 0) ? oficialRate : 1);
+    const totalTargetUsd = useEfectivoTotal ? (totalEfectivoAmount > 0 ? totalEfectivoAmount : totalBcvAmount) : totalBcvAmount;
 
     let totalPagadoUsd = Array.from(document.querySelectorAll('.edit-payment-amount-input'))
         .reduce((sum, input) => {
             const container = input.closest('.payment-method-input');
             if (container && container.style.display !== 'none') {
                 const val = parseFloat(input.value) || 0;
-                if (input.dataset.currency === 'BS' && oficialRate > 0) {
-                    return sum + (val / oficialRate);
+                if (input.dataset.currency === 'BS') {
+                    return sum + (currentRate > 0 ? (val / currentRate) : 0);
                 }
                 return sum + val;
             }
             return sum;
         }, 0);
-    
-    totalPagadoUsd = parseFloat(totalPagadoUsd.toFixed(2));
-    const faltante = totalVenta - totalPagadoUsd;
 
-    document.getElementById('editModalTotalPagado').textContent = `$ ${formatCurrency(totalPagadoUsd)}`;
-    document.getElementById('editModalFaltante').textContent = `$ ${formatCurrency(Math.abs(faltante))}`;
+    const faltante = totalTargetUsd - totalPagadoUsd;
 
-    document.getElementById('editModalFaltanteBs').textContent = `Bs ${formatCurrency(Math.abs(faltante) * oficialRate)}`;
-    
+    const editUsdEl = document.getElementById('editModalTotalUsd');
+    if (editUsdEl) editUsdEl.textContent = `$ ${formatCurrency(totalTargetUsd)}`;
+    const editBsEl = document.getElementById('editModalTotalBs');
+    if (editBsEl) editBsEl.textContent = `Bs ${formatCurrency(totalTargetUsd * currentRate)}`;
+
+    const totalPagadoEl = document.getElementById('editModalTotalPagado');
+    if (totalPagadoEl) totalPagadoEl.textContent = `$ ${formatCurrency(totalPagadoUsd)}`;
+    const totalPagadoBsEl = document.getElementById('editModalTotalPagadoBs');
+    if (totalPagadoBsEl) totalPagadoBsEl.textContent = `Bs ${formatCurrency(totalPagadoUsd * currentRate)}`;
+    const faltanteEl = document.getElementById('editModalFaltante');
+    if (faltanteEl) faltanteEl.textContent = `$ ${formatCurrency(Math.abs(faltante))}`;
+    const faltanteBsEl = document.getElementById('editModalFaltanteBs');
+    if (faltanteBsEl) faltanteBsEl.textContent = `Bs ${formatCurrency(Math.abs(faltante) * currentRate)}`;
+
     const faltanteLabel = document.getElementById('editFaltanteLabel');
     const btnConfirmar = document.getElementById('btnConfirmarEdicionVenta');
     const pagoPendiente = document.getElementById('editPagoPendienteCheckbox')?.checked || false; // Leer checkbox
 
-    // Resetear estilos
-    faltanteLabel.style.color = 'var(--btn-red)';
-    document.getElementById('editModalFaltante').style.color = 'var(--btn-red)';
-    document.getElementById('editModalFaltanteBs').style.color = 'var(--btn-red)';
+    if (faltanteLabel) faltanteLabel.style.color = 'var(--btn-red)';
+    if (faltanteEl) faltanteEl.style.color = 'var(--btn-red)';
+    if (faltanteBsEl) faltanteBsEl.style.color = 'var(--btn-red)';
+
+    if (!btnConfirmar) return;
 
     if (pagoPendiente) {
         btnConfirmar.disabled = false;
         btnConfirmar.textContent = 'Guardar como Pendiente';
-        faltanteLabel.textContent = 'Crédito Pendiente';
-        faltanteLabel.style.color = 'var(--btn-orange)';
-        document.getElementById('editModalFaltante').style.color = 'var(--btn-orange)';
-        document.getElementById('editModalFaltanteBs').style.color = 'var(--btn-orange)';
+        if (faltanteLabel) {
+            faltanteLabel.textContent = 'Crédito Pendiente';
+            faltanteLabel.style.color = 'var(--btn-orange)';
+        }
+        if (faltanteEl) faltanteEl.style.color = 'var(--btn-orange)';
+        if (faltanteBsEl) faltanteBsEl.style.color = 'var(--btn-orange)';
     } else if (faltante < -0.01) { // Sobrante
-        faltanteLabel.textContent = '¡Sobrante!';
+        if (faltanteLabel) faltanteLabel.textContent = '¡Sobrante!';
         btnConfirmar.disabled = true;
         btnConfirmar.textContent = 'Monto excede el total';
     } else if (Math.abs(faltante) < 0.01) { // Completo
-        faltanteLabel.textContent = 'Completo';
-        faltanteLabel.style.color = 'var(--btn-green)';
-        document.getElementById('editModalFaltante').style.color = 'var(--btn-green)';
-        document.getElementById('editModalFaltanteBs').style.color = 'var(--btn-green)';
+        if (faltanteLabel) {
+            faltanteLabel.textContent = 'Completo';
+            faltanteLabel.style.color = 'var(--btn-green)';
+        }
+        if (faltanteEl) faltanteEl.style.color = 'var(--btn-green)';
+        if (faltanteBsEl) faltanteBsEl.style.color = 'var(--btn-green)';
         btnConfirmar.disabled = false;
         btnConfirmar.textContent = 'Guardar Cambios';
     } else { // Faltante
-        faltanteLabel.textContent = 'Faltante';
+        if (faltanteLabel) faltanteLabel.textContent = 'Faltante';
         btnConfirmar.disabled = true; // Deshabilitar si el pago está incompleto y no es crédito
         btnConfirmar.textContent = 'Monto no coincide';
     }
@@ -1333,9 +1701,36 @@ async function handleAbrirModalEditarVenta(venta) {
 
     const totalDeLaVenta = parseFloat(venta.total_usd);
 
+    // --- INICIO: Calcular el total en efectivo para esta venta específica ---
+    let totalEfectivoDeLaVenta = 0;
+    if (venta.detalles && venta.detalles.length > 0) {
+        totalEfectivoDeLaVenta = venta.detalles.reduce((acc, detalle) => {
+            const producto = productosCache.find(p => p.codigo === detalle.producto_codigo);
+            if (producto) {
+                // Si el producto está en caché, usar su precio de venta en efectivo
+                return acc + (producto.venta_$_efectivo * detalle.cantidad);
+            }
+            // Fallback para productos no encontrados en caché (ej. 'adicionales')
+            // Para estos, el precio en efectivo es el mismo que el precio unitario (BCV) guardado.
+            return acc + (detalle.precio_unitario * detalle.cantidad);
+        }, 0);
+    }
+    totalEfectivoDeLaVenta = parseFloat(totalEfectivoDeLaVenta.toFixed(2));
+    // --- FIN: Calcular el total en efectivo ---
+
     // 1. Poblar datos del cliente y totales
     document.getElementById('editVentaId').value = venta.id;
     document.getElementById('editVentaTotalUsd').value = totalDeLaVenta;
+    // --- INICIO: Guardar el total en efectivo en un input oculto ---
+    let editVentaTotalEfectivoInput = document.getElementById('editVentaTotalEfectivo');
+    if (!editVentaTotalEfectivoInput) {
+        editVentaTotalEfectivoInput = document.createElement('input');
+        editVentaTotalEfectivoInput.type = 'hidden';
+        editVentaTotalEfectivoInput.id = 'editVentaTotalEfectivo';
+        document.getElementById('formEditarVenta').appendChild(editVentaTotalEfectivoInput);
+    }
+    editVentaTotalEfectivoInput.value = totalEfectivoDeLaVenta;
+    // --- FIN: Guardar el total en efectivo ---
     document.getElementById('editVentaIdDisplay').textContent = `#${venta.id}`;
     document.getElementById('editCliNombre').value = venta.cliente_nombre;
     if (venta.cliente_cedula && venta.cliente_cedula.includes('-')) {
@@ -1346,7 +1741,10 @@ async function handleAbrirModalEditarVenta(venta) {
         document.getElementById('editCliTipoCedula').value = 'V';
         document.getElementById('editCliCedula').value = venta.cliente_cedula || '';
     }
-    document.getElementById('editCliTelefono').value = venta.cliente_telefono;
+    const parsedEditTel = parseTelefonoVE(venta.cliente_telefono);
+    const editCodSelect = document.getElementById('editCliCodTelefono');
+    if (editCodSelect) editCodSelect.value = parsedEditTel.cod;
+    document.getElementById('editCliTelefono').value = parsedEditTel.num;
     document.getElementById('editCliDireccion').value = venta.cliente_direccion || '';
     document.getElementById('editModalTotalUsd').textContent = `$ ${formatCurrency(totalDeLaVenta)}`;
     document.getElementById('editModalTotalBs').textContent = `Bs ${formatCurrency(totalDeLaVenta * oficialRate)}`;
@@ -1366,9 +1764,9 @@ async function handleAbrirModalEditarVenta(venta) {
         if (!leftActionsContainer.querySelector('#editPagoPendienteContainer')) {
             const pendienteContainer = document.createElement('div');
             pendienteContainer.id = 'editPagoPendienteContainer';
-            pendienteContainer.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+            pendienteContainer.className = 'checkbox-action-container';
             pendienteContainer.innerHTML = `
-                <input type="checkbox" id="editPagoPendienteCheckbox" style="width: 18px; height: 18px; cursor: pointer;">
+                <input type="checkbox" id="editPagoPendienteCheckbox" class="pago-pendiente-check">
                 <label for="editPagoPendienteCheckbox" style="font-weight: 600; cursor: pointer; user-select: none; color: var(--btn-orange);">Pago pendiente (crédito)</label>
             `;
             leftActionsContainer.appendChild(pendienteContainer);
@@ -1383,7 +1781,7 @@ async function handleAbrirModalEditarVenta(venta) {
     const metodosEnBolivares = ['Pago Móvil', 'Bolívares en efectivo'];
     const paymentContainer = document.getElementById('editPaymentMethodsContainer');
     paymentContainer.innerHTML = METODOS_DE_PAGO.map(metodo => {
-        const id = `edit_${metodo.toLowerCase().replace(/ /g, '_').replace('ó','o')}`;
+        const id = `edit_${metodo.toLowerCase().replace(/ /g, '_').replace('ó', 'o')}`;
         // Ensure 'ó' is replaced correctly for consistency
         const isBsMethod = metodosEnBolivares.includes(metodo);
         const currencyLabel = isBsMethod ? 'Bs' : '$';
@@ -1409,19 +1807,22 @@ async function handleAbrirModalEditarVenta(venta) {
     } catch (e) { /* no-op */ }
 
     pagosExistentes.forEach(pago => {
-        const metodoNormalizado = pago.metodo.toLowerCase().replace(/ /g, '_').replace('ó','o');
+        const metodoNormalizado = pago.metodo.toLowerCase().replace(/ /g, '_').replace('ó', 'o');
         const id = `edit_${metodoNormalizado}`;
         const check = document.getElementById(`check_${id}`);
         const amountInput = document.getElementById(`amount_${id}`);
-        
+
         if (check && amountInput) {
             check.checked = true;
             document.getElementById(`input_container_${id}`).style.display = 'flex';
-            
+
             if (amountInput.dataset.currency === 'BS') {
-                amountInput.value = (pago.monto * oficialRate).toFixed(2);
+                const saleBs = parseFloat(venta.total_bs) || 0;
+                const saleUsd = parseFloat(venta.total_usd) || 1;
+                const rate = saleBs > 0 ? (saleBs / saleUsd) : oficialRate;
+                amountInput.value = (pago.monto_original !== undefined && pago.monto_original !== null) ? parseFloat(pago.monto_original) : parseFloat((pago.monto * rate).toFixed(2));
             } else {
-                amountInput.value = pago.monto.toFixed(2);
+                amountInput.value = (pago.monto_original !== undefined && pago.monto_original !== null) ? parseFloat(pago.monto_original) : parseFloat(pago.monto);
             }
         }
     });
@@ -1440,7 +1841,7 @@ async function handleAbrirModalEditarVenta(venta) {
     modalBody.addEventListener('input', updateHandler);
     modalBody.addEventListener('change', updateHandler);
     modalBody.updateHandler = updateHandler;
-    
+
     modalBody.querySelectorAll('[data-edit-method-id]').forEach(check => {
         const newCheck = check.cloneNode(true);
         check.parentNode.replaceChild(newCheck, check);
@@ -1632,7 +2033,7 @@ async function initVistaReportes() {
 
             const daysInMonth = new Date(anho, parseInt(mes) + 1, 0).getDate();
             const currentVal = parseInt(diaSelect.value);
-            
+
             let dayOptions = '';
             for (let i = 1; i <= daysInMonth; i++) dayOptions += `<option value="${i}">${i}</option>`;
             diaSelect.innerHTML = dayOptions;
@@ -1664,13 +2065,14 @@ async function initVistaReportes() {
     } catch (error) {
         console.error('Error al generar reportes:', error);
         const visor = document.getElementById('visor-modulos');
-        if(visor) visor.innerHTML = `<div class="welcome-container"><h1>Error en Reportes</h1><p>No se pudieron cargar los datos para los reportes: ${error.message}</p></div>`;
+        if (visor) visor.innerHTML = `<div class="welcome-container"><h1>Error en Reportes</h1><p>No se pudieron cargar los datos para los reportes: ${error.message}</p></div>`;
     }
 }
 
 function generarReporteParaPeriodo(periodo, ventas, productosMap) {
     const usdEl = document.getElementById(`${periodo}-total-usd`);
     const bsEl = document.getElementById(`${periodo}-total-bs`);
+    const divisasEl = document.getElementById(`${periodo}-total-divisas`);
     const gananciaEl = document.getElementById(`${periodo}-total-ganancia`);
     const breakdownContainer = document.getElementById(`${periodo}-metodos-pago`);
     const chartCanvas = document.getElementById(`${periodo}-chart`);
@@ -1684,87 +2086,205 @@ function generarReporteParaPeriodo(periodo, ventas, productosMap) {
 
     const chartContainer = chartCanvas.parentElement;
     if (!ventas || ventas.length === 0) {
-        usdEl.textContent = `$${formatCurrency(0)}`;
+        usdEl.textContent = `$ ${formatCurrency(0)}`;
         bsEl.textContent = `Bs ${formatCurrency(0)}`;
-        gananciaEl.textContent = `$${formatCurrency(0)}`;
+        if (divisasEl) divisasEl.textContent = `$ ${formatCurrency(0)}`;
+        gananciaEl.textContent = `$ ${formatCurrency(0)}`;
         breakdownContainer.innerHTML = '<p class="loading-text">No hay ventas en este período.</p>';
         if (chartContainer) chartContainer.style.display = 'none'; // Ocultar si no hay datos
         return;
     }
     if (chartContainer) chartContainer.style.display = 'block'; // Mostrar si hay datos
 
-    let totalUsd = 0, totalBs = 0, totalProfit = 0;
-    const porMetodo = {};
+    const metodosBsKeys = ['Pago Móvil', 'Bolívares en efectivo'];
+    const breakdownBs = {
+        'Pago Móvil': { count: 0, totalBs: 0, totalUsd: 0 },
+        'Bolívares en efectivo': { count: 0, totalBs: 0, totalUsd: 0 }
+    };
+
+    const breakdownDivisas = {
+        'Dólares en efectivo': { count: 0, totalUsd: 0 },
+        'Binance': { count: 0, totalUsd: 0 },
+        'Zelle': { count: 0, totalUsd: 0 }
+    };
+
+    let totalVentasUsd = 0;
+    let totalVentasBs = 0;
+    let totalProfit = 0;
 
     for (const venta of ventas) {
-        totalUsd += parseFloat(venta.total_usd || 0);
-        totalBs += parseFloat(venta.total_bs || 0);
+        const ventaUsd = parseFloat(venta.total_usd || 0);
+        const ventaBs = parseFloat(venta.total_bs || 0);
+        const saleRate = (ventaUsd > 0 && ventaBs > 0) ? (ventaBs / ventaUsd) : oficialRate;
 
+        totalVentasUsd += ventaUsd;
+        totalVentasBs += ventaBs;
+
+        let pagos = [];
         try {
-            const pagos = JSON.parse(venta.tipo_pago);
-            if (Array.isArray(pagos) && pagos.length > 0) {
-                pagos.forEach(pago => {
-                    const metodo = pago.metodo || 'No especificado';
-                    const montoUsd = parseFloat(pago.monto || 0);
-                    if (!porMetodo[metodo]) {
-                        porMetodo[metodo] = { totalUsd: 0, count: 0 };
-                    }
-                    porMetodo[metodo].totalUsd += montoUsd;
-                    porMetodo[metodo].count++;
-                });
+            const parsed = typeof venta.tipo_pago === 'string' ? JSON.parse(venta.tipo_pago) : venta.tipo_pago;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                pagos = parsed;
+            }
+        } catch (e) { }
+
+        if (pagos.length === 0) {
+            const raw = String(venta.tipo_pago || '');
+            if (raw.includes('Bolívares') || raw.includes('Pago Móvil')) {
+                breakdownBs['Pago Móvil'].count++;
+                breakdownBs['Pago Móvil'].totalBs += ventaBs;
+                breakdownBs['Pago Móvil'].totalUsd += ventaUsd;
             } else {
-                throw new Error('No es un array de pagos válido.');
+                breakdownDivisas['Dólares en efectivo'].count++;
+                breakdownDivisas['Dólares en efectivo'].totalUsd += ventaUsd;
             }
-        } catch (e) {
-            // Fallback para datos antiguos o mal formados (ej. una sola cadena de texto)
-            const metodo = venta.tipo_pago || 'No especificado';
-            const montoUsd = parseFloat(venta.total_usd || 0);
-            if (!porMetodo[metodo]) {
-                porMetodo[metodo] = { totalUsd: 0, count: 0 };
-            }
-            porMetodo[metodo].totalUsd += montoUsd;
-            porMetodo[metodo].count++;
+        } else {
+            pagos.forEach(p => {
+                const metodo = p.metodo || 'Dólares en efectivo';
+                const isBs = p.moneda === 'BS' || metodosBsKeys.includes(metodo);
+
+                if (isBs) {
+                    let valBs = 0;
+                    let valUsd = 0;
+                    if (p.monto_original !== undefined && p.monto_original !== null && !isNaN(parseFloat(p.monto_original))) {
+                        valBs = parseFloat(p.monto_original);
+                        valUsd = parseFloat(p.monto || (valBs / saleRate));
+                    } else if (p.monto !== undefined && p.monto !== null && !isNaN(parseFloat(p.monto))) {
+                        valUsd = parseFloat(p.monto);
+                        valBs = valUsd * saleRate;
+                    }
+
+                    const key = (metodo === 'Bolívares en efectivo') ? 'Bolívares en efectivo' : 'Pago Móvil';
+                    breakdownBs[key].count++;
+                    breakdownBs[key].totalBs += valBs;
+                    breakdownBs[key].totalUsd += valUsd;
+                } else {
+                    let valUsd = 0;
+                    if (p.monto_original !== undefined && p.monto_original !== null && !isNaN(parseFloat(p.monto_original))) {
+                        valUsd = parseFloat(p.monto_original);
+                    } else if (p.monto !== undefined && p.monto !== null && !isNaN(parseFloat(p.monto))) {
+                        valUsd = parseFloat(p.monto);
+                    }
+
+                    let key = 'Dólares en efectivo';
+                    if (metodo.includes('Binance')) key = 'Binance';
+                    else if (metodo.includes('Zelle')) key = 'Zelle';
+
+                    breakdownDivisas[key].count++;
+                    breakdownDivisas[key].totalUsd += valUsd;
+                }
+            });
         }
 
         if (venta.detalles) {
             for (const detalle of venta.detalles) {
-                const producto = productosMap.get(detalle.producto_codigo);
-                if (producto && producto.precio_costo_dolares_bcv != null && producto.precio_venta_dolares_bcv != null) {
-                    const gananciaPorUnidad = producto.precio_venta_dolares_bcv - producto.precio_costo_dolares_bcv;
-                    totalProfit += gananciaPorUnidad * detalle.cantidad;
+                const producto = productosMap ? productosMap.get(detalle.producto_codigo) : null;
+                const precioVenta = parseFloat(detalle.precio_unitario || 0);
+                let costo = 0;
+                if (producto) {
+                    if (detalle.tipo_precio_usado === 'EFECTIVO') {
+                        costo = parseFloat(producto['costo_$_efectivo'] || producto['calc_costo_$_efectivo'] || producto.precio_costo_dolares_bcv || 0);
+                    } else {
+                        costo = parseFloat(producto.precio_costo_dolares_bcv || 0);
+                    }
                 }
+                const gananciaPorUnidad = Math.max(0, precioVenta - costo);
+                totalProfit += gananciaPorUnidad * (parseInt(detalle.cantidad, 10) || 1);
             }
         }
     }
 
-    usdEl.textContent = `$${formatCurrency(totalUsd)}`;
-    bsEl.textContent = `Bs ${formatCurrency(totalBs)}`;
-    gananciaEl.textContent = `$${formatCurrency(totalProfit)}`;
+    const totalBsSum = breakdownBs['Pago Móvil'].totalBs + breakdownBs['Bolívares en efectivo'].totalBs;
+    const totalBsUsdEquiv = breakdownBs['Pago Móvil'].totalUsd + breakdownBs['Bolívares en efectivo'].totalUsd;
+    const totalDivisasUsd = breakdownDivisas['Dólares en efectivo'].totalUsd + breakdownDivisas['Binance'].totalUsd + breakdownDivisas['Zelle'].totalUsd;
 
-    // Renderizar la tabla de desglose
+    usdEl.textContent = `$ ${formatCurrency(totalVentasUsd)}`;
+    bsEl.textContent = `Bs ${formatCurrency(totalBsSum)}`;
+    if (divisasEl) divisasEl.textContent = `$ ${formatCurrency(totalDivisasUsd)}`;
+    gananciaEl.textContent = `$ ${formatCurrency(totalProfit)}`;
+
+    // Renderizar la tabla de desglose estructurada en dos grupos
     const table = document.createElement('table');
     table.className = 'breakdown-table';
-    table.innerHTML = `<thead><tr><th>Método de Pago</th><th style="text-align: right;">Total USD</th><th style="text-align: right;">Total BS</th></tr></thead><tbody></tbody>`;
-    const tbody = table.querySelector('tbody');
-    
-    for (const [metodo, data] of Object.entries(porMetodo).sort((a, b) => b[1].totalUsd - a[1].totalUsd)) {
-        const row = document.createElement('tr');
-        const totalBsMetodo = data.totalUsd * oficialRate;
-        row.innerHTML = `
-            <td>${metodo} (${formatInteger(data.count)} transacciones)</td>
-            <td>$${formatCurrency(data.totalUsd)}</td>
-            <td>Bs ${formatCurrency(totalBsMetodo)}</td>
-        `;
-        tbody.appendChild(row);
-    }
+    table.innerHTML = `
+        <thead>
+            <tr style="background: var(--bg-hover);">
+                <th colspan="3" style="font-size: 0.85rem; font-weight: bold; color: var(--btn-blue); text-transform: uppercase;">
+                    🇻🇪 Pagos en Bolívares (BCV)
+                </th>
+            </tr>
+            <tr>
+                <th>Método</th>
+                <th style="text-align: right;">Total BS</th>
+                <th style="text-align: right;">Equiv. USD</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Pago Móvil (${formatInteger(breakdownBs['Pago Móvil'].count)} trans.)</td>
+                <td style="text-align: right; font-weight: 600;">Bs ${formatCurrency(breakdownBs['Pago Móvil'].totalBs)}</td>
+                <td style="text-align: right; color: var(--text-muted);">$ ${formatCurrency(breakdownBs['Pago Móvil'].totalUsd)}</td>
+            </tr>
+            <tr>
+                <td>Bolívares en efectivo (${formatInteger(breakdownBs['Bolívares en efectivo'].count)} trans.)</td>
+                <td style="text-align: right; font-weight: 600;">Bs ${formatCurrency(breakdownBs['Bolívares en efectivo'].totalBs)}</td>
+                <td style="text-align: right; color: var(--text-muted);">$ ${formatCurrency(breakdownBs['Bolívares en efectivo'].totalUsd)}</td>
+            </tr>
+            <tr style="border-top: 2px solid var(--border-color); background: rgba(59, 130, 246, 0.08);">
+                <td style="font-weight: bold; color: var(--btn-blue);">Subtotal Bolívares</td>
+                <td style="text-align: right; font-weight: bold; color: var(--btn-blue);">Bs ${formatCurrency(totalBsSum)}</td>
+                <td style="text-align: right; font-weight: bold; color: var(--btn-blue);">$ ${formatCurrency(totalBsUsdEquiv)}</td>
+            </tr>
+        </tbody>
+        <thead>
+            <tr style="background: var(--bg-hover);">
+                <th colspan="3" style="font-size: 0.85rem; font-weight: bold; color: var(--btn-orange); text-transform: uppercase; padding-top: 15px;">
+                    💵 Pagos en Dólares Físico / DIGITALES
+                </th>
+            </tr>
+            <tr>
+                <th>Método</th>
+                <th style="text-align: right;" colspan="2">Total USD ($)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Dólares en efectivo (${formatInteger(breakdownDivisas['Dólares en efectivo'].count)} trans.)</td>
+                <td style="text-align: right; font-weight: 600; color: var(--btn-orange);" colspan="2">$ ${formatCurrency(breakdownDivisas['Dólares en efectivo'].totalUsd)}</td>
+            </tr>
+            <tr>
+                <td>Binance (${formatInteger(breakdownDivisas['Binance'].count)} trans.)</td>
+                <td style="text-align: right; font-weight: 600; color: var(--btn-orange);" colspan="2">$ ${formatCurrency(breakdownDivisas['Binance'].totalUsd)}</td>
+            </tr>
+            <tr>
+                <td>Zelle (${formatInteger(breakdownDivisas['Zelle'].count)} trans.)</td>
+                <td style="text-align: right; font-weight: 600; color: var(--btn-orange);" colspan="2">$ ${formatCurrency(breakdownDivisas['Zelle'].totalUsd)}</td>
+            </tr>
+            <tr style="border-top: 2px solid var(--border-color); background: rgba(249, 115, 22, 0.08);">
+                <td style="font-weight: bold; color: var(--btn-orange);">Subtotal Divisas / Físico</td>
+                <td style="text-align: right; font-weight: bold; color: var(--btn-orange);" colspan="2">$ ${formatCurrency(totalDivisasUsd)}</td>
+            </tr>
+        </tbody>
+    `;
 
     breakdownContainer.innerHTML = '';
     breakdownContainer.appendChild(table);
 
-    // Renderizar el gráfico de barras
-    const sortedMetodos = Object.entries(porMetodo).sort((a, b) => b[1].totalUsd - a[1].totalUsd);
-    const chartLabels = sortedMetodos.map(([metodo]) => metodo);
-    const chartData = sortedMetodos.map(([, data]) => data.totalUsd);
+    // Renderizar el gráfico de barras con los 5 métodos
+    const chartLabels = [
+        'Pago Móvil',
+        'Bolívares en efectivo',
+        'Dólares en efectivo',
+        'Binance',
+        'Zelle'
+    ];
+    const chartData = [
+        breakdownBs['Pago Móvil'].totalUsd,
+        breakdownBs['Bolívares en efectivo'].totalUsd,
+        breakdownDivisas['Dólares en efectivo'].totalUsd,
+        breakdownDivisas['Binance'].totalUsd,
+        breakdownDivisas['Zelle'].totalUsd
+    ];
 
     const chartColors = getChartColors();
     const ctx = chartCanvas.getContext('2d');
@@ -1773,10 +2293,22 @@ function generarReporteParaPeriodo(periodo, ventas, productosMap) {
         data: {
             labels: chartLabels,
             datasets: [{
-                label: 'Total Ventas (USD)',
+                label: 'Total Recaudado (USD Equiv)',
                 data: chartData,
-                backgroundColor: chartColors.backgroundColor,
-                borderColor: chartColors.borderColor,
+                backgroundColor: [
+                    'rgba(59, 130, 246, 0.7)',
+                    'rgba(14, 165, 233, 0.7)',
+                    'rgba(249, 115, 22, 0.7)',
+                    'rgba(234, 179, 8, 0.7)',
+                    'rgba(168, 85, 247, 0.7)'
+                ],
+                borderColor: [
+                    '#3b82f6',
+                    '#0ea5e9',
+                    '#f97316',
+                    '#eab308',
+                    '#a855f7'
+                ],
                 borderWidth: 1.5
             }]
         },
@@ -1795,7 +2327,7 @@ function generarReporteParaPeriodo(periodo, ventas, productosMap) {
                     titleFont: { size: 14 },
                     bodyFont: { size: 12 },
                     callbacks: {
-                        label: (context) => `Total: ${formatCurrency(context.parsed.x)}`
+                        label: (context) => `Total: $ ${formatCurrency(context.parsed.x)}`
                     }
                 }
             },
@@ -1835,8 +2367,8 @@ async function initVistaDevoluciones() {
         }
     }
 
-    document.getElementById('btnBuscarVenta').addEventListener('click', buscarVentaParaDevolucion);
-    document.getElementById('devolucionVentaSearch').addEventListener('keypress', (e) => {
+    document.getElementById('btnBuscarVenta')?.addEventListener('click', buscarVentaParaDevolucion);
+    document.getElementById('devolucionVentaSearch')?.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault(); // Evitar que el formulario se envíe si hay uno
             buscarVentaParaDevolucion();
@@ -1846,9 +2378,10 @@ async function initVistaDevoluciones() {
 }
 
 async function buscarVentaParaDevolucion() {
-    const ventaId = document.getElementById('devolucionVentaSearch').value.trim();
+    const ventaId = document.getElementById('devolucionVentaSearch')?.value.trim();
     const container = document.getElementById('devolucionResultContainer');
-    
+    if (!container) return;
+
     if (!ventaId) {
         showToast('Por favor, introduce un ID de venta.', 'info');
         return;
@@ -1882,8 +2415,13 @@ async function buscarVentaParaDevolucion() {
 
 function renderizarVentaParaDevolucion(venta, devolucionesMap) {
     const container = document.getElementById('devolucionResultContainer');
+    if (!container) return;
 
-    let itemsHtml = venta.detalles.map(item => {
+    let itemsHtml = venta.detalles.map((item, index) => {
+        // Usar el índice del array como fallback para una clave única si item.id es nulo.
+        // Esto previene IDs duplicados en el HTML si múltiples detalles de venta tienen un ID nulo.
+        const uniqueKey = item.id !== null && item.id !== undefined ? item.id : `idx-${index}`;
+
         const productoEnCache = productosCache.find(p => p.codigo === item.producto_codigo);
         const cantidadYaDevuelta = devolucionesMap[item.producto_codigo] || 0;
         const cantidadMaxADevolver = item.cantidad - cantidadYaDevuelta;
@@ -1904,9 +2442,9 @@ function renderizarVentaParaDevolucion(venta, devolucionesMap) {
         }
 
         return `
-            <div class="devolucion-item-card" id="devolucion-item-${item.id}" data-producto-codigo="${item.producto_codigo}" data-max-cantidad="${cantidadMaxADevolver}">
+            <div class="devolucion-item-card" id="devolucion-item-${uniqueKey}" data-producto-codigo="${item.producto_codigo}" data-max-cantidad="${cantidadMaxADevolver}">
                 <div class="item-selection">
-                    <input type="checkbox" class="devolucion-item-checkbox" data-detalle-id="${item.id}">
+                    <input type="checkbox" class="devolucion-item-checkbox" data-unique-key="${uniqueKey}">
                 </div>
                 <div class="item-info">
                     <strong>${item.producto_nombre}</strong>
@@ -1915,12 +2453,12 @@ function renderizarVentaParaDevolucion(venta, devolucionesMap) {
                 </div>
                 <div class="item-actions">
                     <div class="field-group">
-                        <label for="cantidad-devuelta-${item.id}">Cant. a Devolver</label>
-                        <input type="number" class="cantidad-a-devolver" id="cantidad-devuelta-${item.id}" min="1" max="${cantidadMaxADevolver}" value="1">
+                        <label for="cantidad-devuelta-${uniqueKey}">Cant. a Devolver</label>
+                        <input type="number" class="cantidad-a-devolver" id="cantidad-devuelta-${uniqueKey}" min="1" max="${cantidadMaxADevolver}" value="1">
                     </div>
                     <div class="field-group" style="flex-grow: 1;">
-                        <label for="motivo-${item.id}">Motivo de la devolución</label>
-                        <input type="text" class="motivo-devolucion" id="motivo-${item.id}" placeholder="Ej: Producto defectuoso">
+                        <label for="motivo-${uniqueKey}">Motivo de la devolución</label>
+                        <input type="text" class="motivo-devolucion" id="motivo-${uniqueKey}" placeholder="Ej: Producto defectuoso">
                     </div>
                 </div>
             </div>
@@ -1963,15 +2501,19 @@ async function handleRegistrarDevolucion(ventaId) {
     itemsSeleccionados.forEach(checkbox => {
         if (errorValidacion) return;
 
-        const detalleId = checkbox.dataset.detalleId;
-        const detalleVenta = venta.detalles.find(d => d.id == detalleId);
+        const uniqueKey = checkbox.dataset.uniqueKey;
+        const detalleVenta = venta.detalles.find((d, i) => {
+            const key = d.id !== null && d.id !== undefined ? d.id : `idx-${i}`;
+            return String(key) === String(uniqueKey);
+        });
+
         if (!detalleVenta) {
-            showToast(`Error interno: no se encontró el detalle de venta.`, 'error');
+            showToast(`Error interno: no se encontró el detalle de venta para la clave ${uniqueKey}.`, 'error');
             errorValidacion = true;
             return;
         }
 
-        const itemCard = document.getElementById(`devolucion-item-${detalleId}`);
+        const itemCard = document.getElementById(`devolucion-item-${uniqueKey}`);
         const productoCodigo = itemCard.dataset.productoCodigo;
         const maxCantidad = parseInt(itemCard.dataset.maxCantidad, 10);
 
@@ -1983,9 +2525,9 @@ async function handleRegistrarDevolucion(ventaId) {
             return;
         }
 
-        const cantidadInput = document.getElementById(`cantidad-devuelta-${detalleId}`);
-        const motivoInput = document.getElementById(`motivo-${detalleId}`);
-        
+        const cantidadInput = document.getElementById(`cantidad-devuelta-${uniqueKey}`);
+        const motivoInput = document.getElementById(`motivo-${uniqueKey}`);
+
         const cantidadADevolver = parseInt(cantidadInput.value, 10);
         const motivo = motivoInput.value.trim();
 
@@ -2005,15 +2547,25 @@ async function handleRegistrarDevolucion(ventaId) {
             const monto_usd_devolucion = cantidadADevolver * detalleVenta.precio_unitario;
             const monto_bs_devolucion = monto_usd_devolucion * saleRate;
 
+            const metaObj = {
+                cedula: venta.cliente_cedula || '',
+                telefono: venta.cliente_telefono || '',
+                tipo_pago: venta.tipo_pago || '',
+                total_usd: venta.total_usd,
+                total_bs: venta.total_bs
+            };
+            const motivoConMeta = `${motivo} [[meta:${JSON.stringify(metaObj)}]]`;
+
             devolucionesParaProcesar.push({
                 venta_id: ventaId,
                 producto_codigo: productoCodigo,
                 producto_nombre: detalleVenta.producto_nombre, // Guardar el nombre para el historial
                 cantidad_devuelta: cantidadADevolver,
-                motivo: motivo,
+                motivo: motivoConMeta,
                 cliente_nombre: venta.cliente_nombre,
                 monto_usd_devolucion: monto_usd_devolucion,
-                monto_bs_devolucion: monto_bs_devolucion
+                monto_bs_devolucion: monto_bs_devolucion,
+                fecha_devolucion: new Date().toISOString()
             });
         }
     });
@@ -2023,9 +2575,11 @@ async function handleRegistrarDevolucion(ventaId) {
     if (isFullReturn) {
         showConfirmation('Está devolviendo todos los productos. La venta original se eliminará y el stock se restaurará. ¿Continuar?', async () => {
             const btn = document.getElementById('btnRegistrarDevolucion');
-            const originalText = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = 'Procesando...';
+            const originalText = btn ? btn.textContent : 'Registrar';
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Procesando...';
+            }
             try {
                 // 1. Registrar las devoluciones para mantener el historial
                 const { error: devolucionError } = await _supabase.from('devoluciones').insert(devolucionesParaProcesar);
@@ -2035,7 +2589,8 @@ async function handleRegistrarDevolucion(ventaId) {
                 await _deleteSaleAndRestoreStock(venta);
 
                 showToast('Devolución total registrada. La venta ha sido eliminada.', 'success');
-                document.getElementById('devolucionResultContainer').innerHTML = ''; // Limpiar la vista
+                const resContainer = document.getElementById('devolucionResultContainer');
+                if (resContainer) resContainer.innerHTML = ''; // Limpiar la vista
                 cargarHistorialDevoluciones(); // Recargar el historial de devoluciones
                 socket.emit('cambio-dato', { type: 'products' });
                 socket.emit('cambio-dato', { type: 'devoluciones' });
@@ -2044,15 +2599,19 @@ async function handleRegistrarDevolucion(ventaId) {
                 console.error('Error en devolución total:', error);
                 showToast(`Error: ${error.message}`, 'error');
             } finally {
-                btn.disabled = false;
-                btn.textContent = originalText;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
             }
         });
     } else { // Lógica para devolución parcial
         const btn = document.getElementById('btnRegistrarDevolucion');
-        const originalText = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = 'Procesando...';
+        const originalText = btn ? btn.textContent : 'Registrar';
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Procesando...';
+        }
         try {
             const { error: devolucionError } = await _supabase.from('devoluciones').insert(devolucionesParaProcesar);
             if (devolucionError) throw devolucionError;
@@ -2073,73 +2632,251 @@ async function handleRegistrarDevolucion(ventaId) {
             console.error('Error en devolución parcial:', error);
             showToast(`Error: ${error.message}`, 'error');
         } finally {
-            btn.disabled = false;
-            btn.textContent = originalText;
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
         }
     }
+}
+
+/**
+ * Agrupa las filas de devoluciones para que los productos devueltos
+ * en una misma operación se muestren en una sola tarjeta de devolución.
+ */
+function agruparDevoluciones(lista) {
+    const grupos = [];
+
+    lista.forEach(item => {
+        let motivoLimpio = item.motivo || '';
+        let meta = {};
+        const metaMatch = (item.motivo || '').match(/\[\[meta:(.*?)\]\]/);
+        if (metaMatch) {
+            try {
+                meta = JSON.parse(metaMatch[1]);
+                motivoLimpio = (item.motivo || '').replace(/\[\[meta:.*?\]\]/, '').trim();
+            } catch (e) { }
+        }
+        item.motivo = motivoLimpio;
+        item.cliente_cedula = meta.cedula || '';
+        item.cliente_telefono = meta.telefono || '';
+        item.tipo_pago = meta.tipo_pago || '';
+
+        if ((!item.cliente_cedula || !item.cliente_telefono || !item.tipo_pago) && item.venta_id) {
+            const venta = (typeof ventasCache !== 'undefined') ? ventasCache.find(v => String(v.id) === String(item.venta_id)) : null;
+            if (venta) {
+                if (!item.cliente_cedula) item.cliente_cedula = venta.cliente_cedula || '';
+                if (!item.cliente_telefono) item.cliente_telefono = venta.cliente_telefono || '';
+                if (!item.tipo_pago) item.tipo_pago = venta.tipo_pago || '';
+            }
+        }
+
+        const itemFecha = new Date(item.fecha_devolucion).getTime();
+
+        // Buscar un grupo existente que pertenezca a la misma operación de devolución:
+        // Criterio: coincidir en fecha (dentro de 10 seg), mismo cliente y misma venta
+        const grupoExistente = grupos.find(g => {
+            const grupoFecha = new Date(g.fecha_devolucion).getTime();
+            const diffSegundos = Math.abs(itemFecha - grupoFecha) / 1000;
+            const mismoCliente = (g.cliente_nombre || '').trim().toLowerCase() === (item.cliente_nombre || '').trim().toLowerCase();
+            const mismaVenta = (item.venta_id && g.venta_id) ? String(item.venta_id) === String(g.venta_id) : true;
+
+            return mismoCliente && mismaVenta && diffSegundos <= 10;
+        });
+
+        if (grupoExistente) {
+            grupoExistente.items.push(item);
+            grupoExistente.totalItems += parseInt(item.cantidad_devuelta, 10) || 0;
+            grupoExistente.totalUsd += parseFloat(item.monto_usd_devolucion || 0);
+            grupoExistente.totalBs += parseFloat(item.monto_bs_devolucion || 0);
+            if (item.id && (!grupoExistente.id || item.id < grupoExistente.id)) {
+                grupoExistente.id = item.id;
+            }
+            if (!grupoExistente.venta_id && item.venta_id) {
+                grupoExistente.venta_id = item.venta_id;
+            }
+            if (!grupoExistente.cliente_cedula && item.cliente_cedula) {
+                grupoExistente.cliente_cedula = item.cliente_cedula;
+            }
+            if (!grupoExistente.cliente_telefono && item.cliente_telefono) {
+                grupoExistente.cliente_telefono = item.cliente_telefono;
+            }
+            if (!grupoExistente.tipo_pago && item.tipo_pago) {
+                grupoExistente.tipo_pago = item.tipo_pago;
+            }
+        } else {
+            grupos.push({
+                id: item.id,
+                venta_id: item.venta_id,
+                cliente_nombre: item.cliente_nombre,
+                cliente_cedula: item.cliente_cedula || '',
+                cliente_telefono: item.cliente_telefono || '',
+                tipo_pago: item.tipo_pago || '',
+                fecha_devolucion: item.fecha_devolucion,
+                totalItems: parseInt(item.cantidad_devuelta, 10) || 0,
+                totalUsd: parseFloat(item.monto_usd_devolucion || 0),
+                totalBs: parseFloat(item.monto_bs_devolucion || 0),
+                items: [item]
+            });
+        }
+    });
+
+    return grupos;
 }
 
 async function cargarHistorialDevoluciones() {
     const container = document.getElementById('historialDevolucionesContent');
     if (!container) return;
     container.innerHTML = '<p style="text-align: center; padding: 10px; color: var(--text-muted);">Cargando historial...</p>';
-    
-    const { data, error } = await _supabase.from('devoluciones').select(`*`).order('fecha_devolucion', { ascending: false }).limit(50);
+
+    const { data, error } = await _supabase.from('devoluciones').select(`*`).order('fecha_devolucion', { ascending: false }).order('id', { ascending: false });
 
     if (error) { container.innerHTML = `<p style="color: var(--btn-red);">Error al cargar el historial.</p>`; return; }
     if (!data || data.length === 0) { container.innerHTML = '<p style="text-align: center; padding: 10px; color: var(--text-muted);">No hay devoluciones registradas.</p>'; return; }
 
-    const historialHtml = data.map(dev => `
-        <div class="historial-devolucion-item">
-            <div class="historial-info">
-                <span class="historial-fecha">${new Date(dev.fecha_devolucion).toLocaleString()}</span>
-                <span class="historial-venta-id">Venta ID: #${dev.venta_id}</span>
-            </div>
-            <div class="historial-body">
+    const grupos = agruparDevoluciones(data);
+
+    // Renderizar los paneles desplegables agrupados
+    const historialHtml = grupos.map(grupo => {
+        const ventaIdDisplay = (grupo.venta_id && grupo.venta_id !== 'null') ? ` (Venta #${grupo.venta_id})` : '';
+        const fechaDevolucionFormateada = new Date(grupo.fecha_devolucion).toLocaleString('es-ES', {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        const { totalUsdBcvDisplay, totalBsBcvDisplay, totalUsdEfectivoDisplay } = calcularTotalesVenta({
+            tipo_pago: grupo.tipo_pago,
+            total_usd: grupo.totalUsd,
+            total_bs: grupo.totalBs
+        });
+
+        const tipoPagoHtml = formatTipoPagoBadges(grupo.tipo_pago, grupo.totalBs, grupo.totalUsd);
+
+        const itemsHtml = grupo.items.map(item => `
+            <div class="historial-devolucion-item-detalle">
                 <div class="historial-producto">
-                    <strong>${dev.producto_nombre || 'Nombre no registrado'} (x${dev.cantidad_devuelta})</strong>
-                    <p class="historial-motivo">Motivo: ${dev.motivo || 'No especificado'}</p>
+                    <strong>${item.producto_nombre || 'Nombre no registrado'} (x${item.cantidad_devuelta})</strong>
+                    <p class="historial-motivo">Motivo: ${item.motivo || 'No especificado'}</p>
+                    <span class="historial-fecha-detalle">Código: ${item.producto_codigo || 'N/A'}</span>
                 </div>
-                <div class="historial-cliente">
-                    <span>Cliente:</span>
-                    <strong>${dev.cliente_nombre || 'N/A'}</strong>
-                </div>
-                <div class="historial-montos">
-                    <span>$ ${formatCurrency(dev.monto_usd_devolucion || 0)}</span>
-                    <span>Bs ${formatCurrency(dev.monto_bs_devolucion || 0)}</span>
+                <div class="historial-montos-detalle">
+                    <span>$ ${formatCurrency(item.monto_usd_devolucion || 0)}</span>
+                    <span>Bs ${formatCurrency(item.monto_bs_devolucion || 0)}</span>
                 </div>
             </div>
-        </div>
-    `).join('');
+        `).join('');
+
+        return `
+            <div class="devolucion-group">
+                <div class="devolucion-group-header">
+                    <div class="devolucion-card-topbar">
+                        <div class="devolucion-card-tags">
+                            <span class="devolucion-badge-id">Devolución #${grupo.id || 'N/A'}${ventaIdDisplay}</span>
+                            <span class="devolucion-badge-fecha">📅 ${fechaDevolucionFormateada}</span>
+                        </div>
+                        <div class="devolucion-card-top-right">
+                            <span class="devolucion-badge-items">${grupo.totalItems} ${grupo.totalItems === 1 ? 'item devuelto' : 'items devueltos'}</span>
+                            <span class="devolucion-header-icono">▼</span>
+                        </div>
+                    </div>
+
+                    <div class="devolucion-card-client-section">
+                        <div class="devolucion-cliente-title">
+                            <span class="devolucion-cliente-avatar">👤</span>
+                            <strong class="historial-cliente">${grupo.cliente_nombre || 'Cliente General'}</strong>
+                        </div>
+                        <div class="devolucion-client-chips">
+                            ${grupo.cliente_cedula ? `<span class="dev-chip dev-chip-cedula"><strong>CI:</strong> ${grupo.cliente_cedula}</span>` : ''}
+                            ${grupo.cliente_telefono ? `<span class="dev-chip dev-chip-telefono"><strong>Tlf:</strong> ${grupo.cliente_telefono}</span>` : ''}
+                        </div>
+                        ${tipoPagoHtml ? `<div class="devolucion-payment-chips">${tipoPagoHtml}</div>` : ''}
+                    </div>
+
+                    <div class="devolucion-card-totals-box">
+                        <div class="dev-total-row">
+                            <span class="dev-total-label">Total USD (BCV):</span>
+                            <span class="dev-total-value dev-val-bcv-usd">${totalUsdBcvDisplay}</span>
+                        </div>
+                        <div class="dev-total-row">
+                            <span class="dev-total-label">Total BS (BCV):</span>
+                            <span class="dev-total-value dev-val-bcv-bs">${totalBsBcvDisplay}</span>
+                        </div>
+                        <div class="dev-total-row">
+                            <span class="dev-total-label">Total USD (Efectivo):</span>
+                            <span class="dev-total-value dev-val-efectivo">${totalUsdEfectivoDisplay}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="devolucion-group-content">
+                    ${itemsHtml}
+                </div>
+            </div>
+        `;
+    }).join('');
 
     container.innerHTML = historialHtml;
+
+    // Añadir lógica para el acordeón
+    container.querySelectorAll('.devolucion-group-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const group = header.closest('.devolucion-group');
+            const isActive = group.classList.toggle('active');
+            const content = group.querySelector('.devolucion-group-content');
+            if (content) {
+                if (isActive) {
+                    // Se suma holgura suficiente para padding y elementos dinámicos
+                    content.style.maxHeight = (content.scrollHeight + 150) + 'px';
+                } else {
+                    content.style.maxHeight = null;
+                }
+            }
+        });
+    });
 }
 
 function setProductModalMode(mode) {
     const form = document.getElementById('formProducto');
     const manualPriceFields = document.querySelectorAll('.manual-price-field');
     const calcContainer = document.getElementById('calculator-container');
-    const calcResults = document.getElementById('calculator-results');
     const btnManual = document.getElementById('btnModoManual');
     const btnCalc = document.getElementById('btnModoCalculadora');
 
-    if (mode === 'calculator') {
-        form.dataset.mode = 'calculator';
+    const isCalc = (mode === 'calculator' || mode === 'calculadora');
+
+    if (isCalc) {
+        if (form) form.dataset.mode = 'calculator';
         manualPriceFields.forEach(el => el.style.display = 'none');
-        calcContainer.style.display = 'block';
-        calcResults.style.display = 'none'; // Ocultar resultados al cambiar de modo
-        btnManual.classList.remove('active');
-        btnCalc.classList.add('active');
+        if (calcContainer) calcContainer.style.display = 'block';
+        if (btnManual) btnManual.classList.remove('active');
+        if (btnCalc) btnCalc.classList.add('active');
     } else { // default to manual
-        form.dataset.mode = 'manual';
+        if (form) form.dataset.mode = 'manual';
         manualPriceFields.forEach(el => el.style.display = 'flex');
-        calcContainer.style.display = 'none';
-        btnManual.classList.add('active');
-        btnCalc.classList.remove('active');
+        if (calcContainer) calcContainer.style.display = 'none';
+        if (btnManual) btnManual.classList.add('active');
+        if (btnCalc) btnCalc.classList.remove('active');
     }
 }
 
 function updatePaymentSummary() {
+    // --- Determinar el total aplicable y la tasa activa (BCV o Efectivo/Paralelo) ---
+    const activeMethodNames = [];
+    document.querySelectorAll('#paymentMethodsContainer input[type="checkbox"]:checked').forEach(check => {
+        const id = check.dataset.methodId;
+        const amountInput = document.getElementById(`amount_${id}`);
+        if (amountInput) {
+            activeMethodNames.push(amountInput.dataset.methodName);
+        }
+    });
+
+    const metodosEnEfectivo = ['Binance', 'Dólares en efectivo', 'Zelle'];
+    const useEfectivoTotal = activeMethodNames.some(name => metodosEnEfectivo.includes(name));
+    const currentRate = useEfectivoTotal ? ((paraleloRate > 0) ? paraleloRate : (oficialRate > 0 ? oficialRate : 1)) : ((oficialRate > 0) ? oficialRate : 1);
+    const totalDeVentaApplicable = useEfectivoTotal ? totalVentaEfectivo : totalVentaActual;
+
     let totalPagadoUsd = Array.from(document.querySelectorAll('.payment-amount-input'))
         .reduce((sum, input) => {
             const container = input.closest('.payment-method-input');
@@ -2147,56 +2884,82 @@ function updatePaymentSummary() {
             if (container && container.style.display !== 'none') {
                 const val = parseFloat(input.value) || 0;
                 if (input.dataset.currency === 'BS') {
-                    // Convertir Bs a USD para la suma total
-                    return sum + parseFloat((val / oficialRate).toFixed(2)); // Redondear a 2 decimales
+                    // Convertir Bs a USD usando la tasa correspondiente (Paralelo si hay método efectivo activo, BCV si es solo Bs)
+                    return sum + (currentRate > 0 ? (val / currentRate) : 0);
                 }
                 return sum + val; // Ya está en USD
             }
             return sum;
         }, 0);
-    totalPagadoUsd = parseFloat(totalPagadoUsd.toFixed(6)); // Asegurar precisión consistente para el total pagado
-    
-    // Redondear el total pagado a 2 decimales para la comparación
-    totalPagadoUsd = parseFloat(totalPagadoUsd.toFixed(2));
 
-    const faltante = totalVentaActual - totalPagadoUsd;
+    const faltante = totalDeVentaApplicable - totalPagadoUsd;
 
-    document.getElementById('modalTotalPagado').textContent = `$ ${formatCurrency(totalPagadoUsd)}`;
-    document.getElementById('modalFaltante').textContent = `$ ${formatCurrency(Math.abs(faltante))}`;
-    document.getElementById('modalFaltanteBs').textContent = `Bs ${formatCurrency(parseFloat((Math.abs(faltante) * oficialRate).toFixed(2)))}`;
+    // --- Etiquetas y totales en el modal ---
+    const totalUsdLabel = document.getElementById('modalTotalUsdLabel');
+    const totalUsdValue = document.getElementById('modalTotalUsd');
+    const totalBsRow = document.getElementById('modalTotalBsRow');
+    const totalBsLabel = document.getElementById('modalTotalBsLabel');
+    const totalBsValue = document.getElementById('modalTotalBs');
+    const totalEfectivoRow = document.getElementById('modalTotalEfectivoRow');
+
+    if (useEfectivoTotal) {
+        if (totalUsdLabel) totalUsdLabel.textContent = 'Total a Pagar $ (efectivo):';
+        if (totalUsdValue) totalUsdValue.textContent = `$ ${formatCurrency(totalVentaEfectivo)}`;
+        if (totalBsRow) totalBsRow.style.display = 'flex';
+        if (totalBsLabel) totalBsLabel.textContent = 'Total a Pagar Bs (paralelo):';
+        if (totalBsValue) totalBsValue.textContent = `Bs ${formatCurrency(totalVentaEfectivo * currentRate)}`;
+        if (totalEfectivoRow) totalEfectivoRow.style.display = 'none';
+    } else {
+        if (totalUsdLabel) totalUsdLabel.textContent = 'Total a Pagar $ (bcv):';
+        if (totalUsdValue) totalUsdValue.textContent = `$ ${formatCurrency(totalVentaActual)}`;
+        if (totalBsRow) totalBsRow.style.display = 'flex';
+        if (totalBsLabel) totalBsLabel.textContent = 'Total a Pagar bs (bcv):';
+        if (totalBsValue) totalBsValue.textContent = `Bs ${formatCurrency(totalVentaActual * oficialRate)}`;
+        if (totalEfectivoRow) totalEfectivoRow.style.display = 'flex';
+    }
+
+    const totalPagadoEl = document.getElementById('modalTotalPagado');
+    if (totalPagadoEl) totalPagadoEl.textContent = `$ ${formatCurrency(totalPagadoUsd)}`;
+    const faltanteEl = document.getElementById('modalFaltante');
+    if (faltanteEl) faltanteEl.textContent = `$ ${formatCurrency(Math.abs(faltante))}`;
+    const faltanteBsEl = document.getElementById('modalFaltanteBs');
+    if (faltanteBsEl) faltanteBsEl.textContent = `Bs ${formatCurrency(Math.abs(faltante) * currentRate)}`;
 
     const faltanteLabel = document.getElementById('faltanteLabel');
-    const faltanteValue = document.getElementById('modalFaltante');
-    const faltanteBsValue = document.getElementById('modalFaltanteBs');
     const btnConfirmar = document.getElementById('btnConfirmarVenta');
     const pagoPendiente = document.getElementById('pagoPendienteCheckbox')?.checked || false;
 
     // Resetear estilos
-    faltanteLabel.style.color = 'var(--btn-red)';
-    faltanteValue.style.color = 'var(--btn-red)';
-    faltanteBsValue.style.color = 'var(--btn-red)';
+    if (faltanteLabel) faltanteLabel.style.color = 'var(--btn-red)';
+    if (faltanteEl) faltanteEl.style.color = 'var(--btn-red)';
+    if (faltanteBsEl) faltanteBsEl.style.color = 'var(--btn-red)';
+
+    if (!btnConfirmar) return;
 
     if (pagoPendiente) {
         btnConfirmar.disabled = false;
         btnConfirmar.textContent = 'Guardar como Pendiente';
-        faltanteLabel.textContent = 'Crédito Pendiente';
-        faltanteLabel.style.color = 'var(--btn-orange)';
-        faltanteValue.style.color = 'var(--btn-orange)';
-        faltanteBsValue.style.color = 'var(--btn-orange)';
+        if (faltanteLabel) {
+            faltanteLabel.textContent = 'Crédito Pendiente';
+            faltanteLabel.style.color = 'var(--btn-orange)';
+        }
+        if (faltanteEl) faltanteEl.style.color = 'var(--btn-orange)';
+        if (faltanteBsEl) faltanteBsEl.style.color = 'var(--btn-orange)';
     } else if (faltante < -0.01) { // Sobrante
-        faltanteLabel.textContent = '¡Sobrante!';
+        if (faltanteLabel) faltanteLabel.textContent = '¡Sobrante!';
         btnConfirmar.disabled = true;
         btnConfirmar.textContent = 'Monto excede el total';
-        showToast('El monto pagado excede el total de la venta.', 'error', 2000); // Mensaje explícito
     } else if (Math.abs(faltante) < 0.01) { // Completo
-        faltanteLabel.textContent = 'Completo';
-        faltanteLabel.style.color = 'var(--btn-green)';
-        faltanteValue.style.color = 'var(--btn-green)';
-        faltanteBsValue.style.color = 'var(--btn-green)';
+        if (faltanteLabel) {
+            faltanteLabel.textContent = 'Completo';
+            faltanteLabel.style.color = 'var(--btn-green)';
+        }
+        if (faltanteEl) faltanteEl.style.color = 'var(--btn-green)';
+        if (faltanteBsEl) faltanteBsEl.style.color = 'var(--btn-green)';
         btnConfirmar.disabled = false;
         btnConfirmar.textContent = 'Procesar Pago';
     } else { // Faltante
-        faltanteLabel.textContent = 'Faltante';
+        if (faltanteLabel) faltanteLabel.textContent = 'Faltante';
         btnConfirmar.disabled = true;
         btnConfirmar.textContent = 'Monto no coincide';
     }
@@ -2229,7 +2992,7 @@ async function proceedWithReset() {
         // 3. Borrar todas las ventas
         const { error: venError } = await _supabase.from('ventas').delete().neq('id', -1);
         if (venError) throw new Error(`Error al borrar ventas: ${venError.message}`);
-        
+
         // 4. Llamar a la función para reiniciar la secuencia del ID
         const { error: rpcError } = await _supabase.rpc('reset_ventas_id_sequence');
         if (rpcError) {
@@ -2237,7 +3000,7 @@ async function proceedWithReset() {
         }
 
         showToast('¡Éxito! Todos los datos de ventas han sido borrados y los IDs se han reiniciado.', 'success', 5000);
-        
+
         // Recargar vistas relevantes si están activas
         const vistaActiva = document.querySelector('.nav-btn.active').textContent.trim().toLowerCase();
         if (['ventas', 'reportes', 'devoluciones'].includes(vistaActiva)) {
@@ -2258,20 +3021,23 @@ async function handleReiniciarVentas() {
         '¿Estás SEGURO de que quieres borrar TODAS las ventas, devoluciones y reiniciar los IDs? Esta acción es IRREVERSIBLE.',
         'confirm'
     );
- 
+
     if (!confirmed) {
         showToast('Operación cancelada.', 'info');
         return;
     }
- 
-    // Abrir modal de contraseña en lugar de prompt
-    const modal = document.getElementById('modalResetPassword');
-    if (modal) {
-        modal.classList.add('active');
-        const input = document.getElementById('resetPasswordInput');
-        if (input) input.focus();
+
+    const password = prompt("Para confirmar, ingresa la contraseña de seguridad:");
+
+    if (password === null) {
+        showToast('Operación cancelada.', 'info');
+        return;
+    }
+
+    if (password === BORRAR_PASS) {
+        await proceedWithReset();
     } else {
-        showToast('Error: No se encontró el modal de confirmación.', 'error');
+        showToast('Contraseña incorrecta. La operación ha sido cancelada.', 'error');
     }
 }
 
@@ -2292,7 +3058,7 @@ function initVistaAjustes() {
     // Evento para el toggle de Tema
     const themeSwitch = document.getElementById('themeSwitch');
     if (themeSwitch) {
-        themeSwitch.addEventListener('change', function() {
+        themeSwitch.addEventListener('change', function () {
             const newTheme = this.checked ? 'light' : 'dark';
             guardarYAplicarTema(newTheme);
             // Si la vista de reportes está activa, la recargamos para actualizar los gráficos
@@ -2303,23 +3069,30 @@ function initVistaAjustes() {
     }
 
     // Evento para el toggle de Tasa Oficial
-    document.getElementById('tasaOficialModo').addEventListener('change', function() {
-        document.getElementById('manualOficialRateContainer').style.display = this.checked ? 'block' : 'none';
+    document.getElementById('tasaOficialModo')?.addEventListener('change', function () {
+        const container = document.getElementById('manualOficialRateContainer');
+        if (container) container.style.display = this.checked ? 'block' : 'none';
     });
     // Evento para el toggle de Tasa Paralelo
-    document.getElementById('tasaParaleloModo').addEventListener('change', function() {
-        document.getElementById('manualParaleloRateContainer').style.display = this.checked ? 'block' : 'none';
+    document.getElementById('tasaParaleloModo')?.addEventListener('change', function () {
+        const container = document.getElementById('manualParaleloRateContainer');
+        if (container) container.style.display = this.checked ? 'block' : 'none';
     });
 
-    document.getElementById('guardarAjustesTasa').addEventListener('click', () => {
+    document.getElementById('guardarAjustesTasa')?.addEventListener('click', () => {
+        const oficialModoEl = document.getElementById('tasaOficialModo');
+        const oficialValEl = document.getElementById('manualOficialRate');
+        const paraleloModoEl = document.getElementById('tasaParaleloModo');
+        const paraleloValEl = document.getElementById('manualParaleloRate');
+
         const newSettings = {
             oficial: {
-                mode: document.getElementById('tasaOficialModo').checked ? 'manual' : 'automatico',
-                value: parseFloat(document.getElementById('manualOficialRate').value) || 0
+                mode: oficialModoEl?.checked ? 'manual' : 'automatico',
+                value: parseFloat(oficialValEl?.value) || 0
             },
             paralelo: {
-                mode: document.getElementById('tasaParaleloModo').checked ? 'manual' : 'automatico',
-                value: parseFloat(document.getElementById('manualParaleloRate').value) || 0
+                mode: paraleloModoEl?.checked ? 'manual' : 'automatico',
+                value: parseFloat(paraleloValEl?.value) || 0
             }
         };
         localStorage.setItem(TASA_SETTINGS_KEY, JSON.stringify(newSettings));
@@ -2332,13 +3105,13 @@ function initVistaAjustes() {
     const settingsCard = document.querySelector('.settings-card');
     if (settingsCard && !document.getElementById('btnReiniciarVentas')) {
         const dangerZoneHtml = `
-            <div class="setting-item" style="border-top: 2px solid var(--btn-red); padding-top: 20px; margin-top: 20px; background-color: rgba(220, 38, 38, 0.05);">
+            <div class="setting-item" style="border-top: 2px solid var(--btn-blue); padding-top: 20px; margin-top: 20px; background-color: rgba(37, 99, 235, 0.05);">
                 <div class="setting-label">
-                    <h4 style="color: var(--btn-red);">Zona Peligrosa</h4>
+                    <h4 style="color: var(--btn-blue);">Seguridad</h4>
                     <p>Esta acción borrará permanentemente todo el historial de ventas y devoluciones para reiniciar los IDs.</p>
                 </div>
                 <div class="setting-control">
-                    <button id="btnReiniciarVentas" class="action-btn btn-del">Reiniciar Base de Datos de Ventas</button>
+                    <button id="btnReiniciarVentas" class="action-btn btn-blue">Reiniciar Base de Datos de Ventas</button>
                 </div>
             </div>
         `;
@@ -2348,24 +3121,36 @@ function initVistaAjustes() {
         } else {
             settingsCard.innerHTML += dangerZoneHtml;
         }
-        document.getElementById('btnReiniciarVentas').addEventListener('click', handleReiniciarVentas);
+        document.getElementById('btnReiniciarVentas')?.addEventListener('click', handleReiniciarVentas);
     }
     // --- FIN: Lógica para reiniciar ventas ---
 }
 
 function cargarAjustesTasa() {
     const guardado = localStorage.getItem(TASA_SETTINGS_KEY);
-    if (guardado) tasaSettings = JSON.parse(guardado);
+    if (guardado) {
+        try {
+            tasaSettings = JSON.parse(guardado);
+        } catch (e) {
+            console.error("Error al leer ajustes guardados:", e);
+        }
+    }
 
     // Configurar Tasa Oficial
-    document.getElementById('tasaOficialModo').checked = tasaSettings.oficial.mode === 'manual';
-    document.getElementById('manualOficialRate').value = tasaSettings.oficial.value;
-    document.getElementById('manualOficialRateContainer').style.display = tasaSettings.oficial.mode === 'manual' ? 'block' : 'none';
+    const ofModo = document.getElementById('tasaOficialModo');
+    const ofVal = document.getElementById('manualOficialRate');
+    const ofCont = document.getElementById('manualOficialRateContainer');
+    if (ofModo) ofModo.checked = tasaSettings.oficial.mode === 'manual';
+    if (ofVal) ofVal.value = tasaSettings.oficial.value;
+    if (ofCont) ofCont.style.display = tasaSettings.oficial.mode === 'manual' ? 'block' : 'none';
 
     // Configurar Tasa Paralelo
-    document.getElementById('tasaParaleloModo').checked = tasaSettings.paralelo.mode === 'manual';
-    document.getElementById('manualParaleloRate').value = tasaSettings.paralelo.value;
-    document.getElementById('manualParaleloRateContainer').style.display = tasaSettings.paralelo.mode === 'manual' ? 'block' : 'none';
+    const parModo = document.getElementById('tasaParaleloModo');
+    const parVal = document.getElementById('manualParaleloRate');
+    const parCont = document.getElementById('manualParaleloRateContainer');
+    if (parModo) parModo.checked = tasaSettings.paralelo.mode === 'manual';
+    if (parVal) parVal.value = tasaSettings.paralelo.value;
+    if (parCont) parCont.style.display = tasaSettings.paralelo.mode === 'manual' ? 'block' : 'none';
 }
 
 // --- LÓGICA DE MODALES GLOBALES Y EVENTOS ---
@@ -2379,11 +3164,11 @@ document.addEventListener('click', (e) => {
         const vistaActiva = document.querySelector('.nav-btn.active')?.textContent.trim().toLowerCase();
         if (vistaActiva === 'inventario de productos') {
             if (modoEdicion) return;
-            
+
             // Deseleccionar el anterior
             const selectedCard = document.querySelector('.product-card.selected');
             if (selectedCard) selectedCard.classList.remove('selected');
-            
+
             // Seleccionar el nuevo
             productCard.classList.add('selected');
             const pCodigo = productCard.dataset.codigo;
@@ -2440,14 +3225,42 @@ document.addEventListener('click', (e) => {
 
         let totalAmount = 0;
         let inputSelector = '';
-        let summaryUpdater = () => {};
+        let summaryUpdater = () => { };
+        let currentRate = (oficialRate > 0 ? oficialRate : 1);
 
         if (modal.id === 'modalVenta') {
-            totalAmount = totalVentaActual;
+            const activeMethodNames = [];
+            modal.querySelectorAll('.payment-method-selector input[type="checkbox"]:checked').forEach(check => {
+                const id = check.dataset.methodId;
+                const amountInput = document.getElementById(`amount_${id}`);
+                if (amountInput) {
+                    activeMethodNames.push(amountInput.dataset.methodName);
+                }
+            });
+
+            const metodosEnEfectivo = ['Binance', 'Dólares en efectivo', 'Zelle'];
+            const useEfectivoTotal = activeMethodNames.some(name => metodosEnEfectivo.includes(name));
+            currentRate = useEfectivoTotal ? ((paraleloRate > 0) ? paraleloRate : (oficialRate > 0 ? oficialRate : 1)) : ((oficialRate > 0) ? oficialRate : 1);
+            totalAmount = useEfectivoTotal ? totalVentaEfectivo : totalVentaActual;
             inputSelector = '.payment-amount-input';
             summaryUpdater = updatePaymentSummary;
         } else if (modal.id === 'modalEditarVenta') {
-            totalAmount = parseFloat(document.getElementById('editVentaTotalUsd').value) || 0;
+            const totalBcvAmount = parseFloat(document.getElementById('editVentaTotalUsd').value) || 0;
+            const totalEfectivoAmount = parseFloat(document.getElementById('editVentaTotalEfectivo')?.value) || 0;
+
+            const activeMethodNames = [];
+            modal.querySelectorAll('.payment-method-selector input[type="checkbox"]:checked').forEach(check => {
+                const id = check.dataset.editMethodId;
+                const amountInput = document.getElementById(`amount_${id}`);
+                if (amountInput) {
+                    activeMethodNames.push(amountInput.dataset.methodName);
+                }
+            });
+
+            const metodosEnEfectivo = ['Binance', 'Dólares en efectivo', 'Zelle'];
+            const useEfectivoTotal = activeMethodNames.some(name => metodosEnEfectivo.includes(name));
+            currentRate = useEfectivoTotal ? ((paraleloRate > 0) ? paraleloRate : (oficialRate > 0 ? oficialRate : 1)) : ((oficialRate > 0) ? oficialRate : 1);
+            totalAmount = useEfectivoTotal ? (totalEfectivoAmount > 0 ? totalEfectivoAmount : totalBcvAmount) : totalBcvAmount;
             inputSelector = '.edit-payment-amount-input';
             summaryUpdater = updateEditPaymentSummary;
         } else if (modal.id === 'modalAbonoVenta') {
@@ -2456,6 +3269,8 @@ document.addEventListener('click', (e) => {
             inputSelector = '.abono-payment-amount-input';
             const ventaTotal = parseFloat(document.getElementById('abonoTotalVenta').textContent.replace(/[^0-9.,-]/g, '').replace(',', '.')) || 0;
             const yaPagado = parseFloat(document.getElementById('abonoTotalPagado').textContent.replace(/[^0-9.,-]/g, '').replace(',', '.')) || 0;
+            const ventaTotalBs = parseFloat(document.getElementById('abonoTotalVentaBs').textContent.replace(/[^0-9.,-]/g, '').replace(',', '.')) || 0;
+            currentRate = (ventaTotal > 0 && ventaTotalBs > 0) ? (ventaTotalBs / ventaTotal) : ((paraleloRate > 0) ? paraleloRate : (oficialRate > 0 ? oficialRate : 1));
             summaryUpdater = () => updateAbonoSummary(ventaTotal, yaPagado);
         }
 
@@ -2467,20 +3282,20 @@ document.addEventListener('click', (e) => {
                 const container = input.closest('.payment-method-input');
                 if (container && container.style.display !== 'none') {
                     const val = parseFloat(input.value) || 0;
-                    if (input.dataset.currency === 'BS' && oficialRate > 0) {
-                        return sum + (val / oficialRate);
+                    if (input.dataset.currency === 'BS' && currentRate > 0) {
+                        return sum + (val / currentRate);
                     }
                     return sum + val;
                 }
                 return sum;
             }, 0);
-        
+
         totalPaidByOthers = parseFloat(totalPaidByOthers.toFixed(2));
         const remainingAmountUsd = parseFloat((totalAmount - totalPaidByOthers).toFixed(2));
 
-        if (remainingAmountUsd > 0) {
-            if (targetInput.dataset.currency === 'BS' && oficialRate > 0) {
-                targetInput.value = (remainingAmountUsd * oficialRate).toFixed(2);
+        if (remainingAmountUsd >= 0) {
+            if (targetInput.dataset.currency === 'BS' && currentRate > 0) {
+                targetInput.value = (remainingAmountUsd * currentRate).toFixed(2);
             } else {
                 targetInput.value = remainingAmountUsd.toFixed(2);
             }
@@ -2492,7 +3307,7 @@ document.addEventListener('click', (e) => {
     if (e.target.matches('.btn-pdf')) { // Manejar la generación de PDF de forma asíncrona
         handlePdfButtonClick(e.target);
     }
-    
+
     // Botones de cantidad (+/-) en la vista de Caja
     if (e.target.matches('.quantity-btn[data-codigo]')) {
         const codigo = e.target.dataset.codigo;
@@ -2605,34 +3420,68 @@ document.addEventListener('click', (e) => {
         setProductModalMode('manual');
     } else if (e.target.matches('#btnModoCalculadora')) {
         setProductModalMode('calculator');
+        let precioProv = parseFloat(document.getElementById('calcCostoUsdt')?.value);
+        if (isNaN(precioProv) || precioProv <= 0) {
+            const costoActual = parseFloat(document.getElementById('prodCostoDolaresEfectivo')?.value) ||
+                parseFloat(document.getElementById('prodCostoDolaresBcv')?.value) || 0;
+            if (costoActual > 0) {
+                document.getElementById('calcCostoUsdt').value = costoActual;
+                precioProv = costoActual;
+            }
+        }
+        const porcProv = parseFloat(document.getElementById('calcDescuento')?.value) || 0;
+        const porcVenta = parseFloat(document.getElementById('calcGanancia')?.value) || 0;
+        if (precioProv > 0) {
+            const calculados = calcularPreciosPorcentaje(precioProv, porcProv, porcVenta);
+            const resCostoEf = document.getElementById('resCostoEfectivo');
+            const resCostoBcv = document.getElementById('resCostoBcv');
+            const resVentaBcv = document.getElementById('resVentaBcv');
+            const resVentaEf = document.getElementById('resVentaUsdt');
+            const calcResults = document.getElementById('calculator-results');
+            if (resCostoEf) resCostoEf.textContent = `$ ${formatCurrency(calculados.costoEfectivo)}`;
+            if (resCostoBcv) resCostoBcv.textContent = `$ ${formatCurrency(calculados.costoUsdBcv)}`;
+            if (resVentaBcv) resVentaBcv.textContent = `$ ${formatCurrency(calculados.ventaUsdBcv)}`;
+            if (resVentaEf) resVentaEf.textContent = `$ ${formatCurrency(calculados.ventaEfectivo)}`;
+            if (calcResults) calcResults.style.display = 'block';
+
+            document.getElementById('prodCostoDolaresEfectivo').value = calculados.costoEfectivo;
+            document.getElementById('prodUsdt').value = calculados.ventaEfectivo;
+            document.getElementById('prodCostoDolaresBcv').value = calculados.costoUsdBcv;
+            document.getElementById('prodVentaDolaresBcv').value = calculados.ventaUsdBcv;
+        }
     }
 
     // Botón para calcular precios en el modal de nuevo producto
     if (e.target.matches('#btnCalcularPrecios')) {
-        const costoProductoUsdt = parseFloat(document.getElementById('calcCostoUsdt').value) || 0;
-        const descuento = parseFloat(document.getElementById('calcDescuento').value) || 0;
-        const ganancia = parseFloat(document.getElementById('calcGanancia').value) || 0;
-        const tasaBinance = paraleloRate;
-        const tasaBcv = oficialRate;
+        let precioProv = parseFloat(document.getElementById('calcCostoUsdt').value) || 0;
+        const porcProv = parseFloat(document.getElementById('calcDescuento').value) || 0;
+        const porcVenta = parseFloat(document.getElementById('calcGanancia').value) || 0;
 
-        if (costoProductoUsdt <= 0 || ganancia < 0 || tasaBinance <= 0 || tasaBcv <= 0) {
-            showToast('Costo, ganancia y tasas son requeridos.', 'error');
+        if (precioProv <= 0) {
+            precioProv = parseFloat(document.getElementById('prodCostoDolaresEfectivo')?.value) ||
+                parseFloat(document.getElementById('prodCostoDolaresBcv')?.value) || 0;
+        }
+
+        if (precioProv <= 0) {
+            showToast('Ingresa un precio de proveedor válido mayor a 0.', 'error');
             return;
         }
 
-        const valorConDescuento = costoProductoUsdt * (1 - (descuento / 100));
-        const costoEnBolivares = valorConDescuento * tasaBinance; // Esto es USDT * Tasa Paralelo
-        const precioCostoDolaresBcv = costoEnBolivares / tasaBcv; // Esto es Costo en Bs / Tasa Oficial
-        const precioVentaDolaresBcv = precioCostoDolaresBcv * (1 + (ganancia / 100)); // Esto es Costo $BCV * (1 + Ganancia %)
-        const precioUsdt = valorConDescuento; // Esto es Costo $USDT con descuento
+        const calculados = calcularPreciosPorcentaje(precioProv, porcProv, porcVenta);
 
-        // Mostrar resultados en el cuadro de resultados
-        document.getElementById('resCostoBcv').textContent = `$ ${formatCurrency(precioCostoDolaresBcv)}`;
-        document.getElementById('resVentaBcv').textContent = `$ ${formatCurrency(precioVentaDolaresBcv)}`;
-        document.getElementById('resVentaUsdt').textContent = `$ ${formatCurrency(precioUsdt)}`;
+        document.getElementById('resCostoEfectivo').textContent = `$ ${formatCurrency(calculados.costoEfectivo)}`;
+        document.getElementById('resCostoBcv').textContent = `$ ${formatCurrency(calculados.costoUsdBcv)}`;
+        document.getElementById('resVentaBcv').textContent = `$ ${formatCurrency(calculados.ventaUsdBcv)}`;
+        document.getElementById('resVentaUsdt').textContent = `$ ${formatCurrency(calculados.ventaEfectivo)}`;
         document.getElementById('calculator-results').style.display = 'block';
 
-        showToast('Precios calculados. Revisa los resultados.', 'success');
+        // Poblar los campos de entrada manuales (ocultos) con los valores calculados
+        document.getElementById('prodCostoDolaresEfectivo').value = calculados.costoEfectivo;
+        document.getElementById('prodUsdt').value = calculados.ventaEfectivo;
+        document.getElementById('prodCostoDolaresBcv').value = calculados.costoUsdBcv;
+        document.getElementById('prodVentaDolaresBcv').value = calculados.ventaUsdBcv;
+
+        showToast('Precios calculados y aplicados.', 'success');
     }
 });
 
@@ -2669,18 +3518,20 @@ async function handlePdfButtonClick(btn) {
 
     const ventaId = btn.dataset.ventaId;
     const venta = ventasCache.find(v => v.id == ventaId);
-    if (venta && paraleloRate) {
-        try {
-            await generarFacturaPDF(venta, paraleloRate, productosCache);
-        } catch (error) {
-            console.error('Error al generar el PDF:', error);
-            showToast('Error al generar el PDF.', 'error');
-        } finally {
-            btn.disabled = false;
-            btn.textContent = originalText;
-        }
-    } else {
-        showToast('No se encontró la venta para generar el PDF o la tasa paralela no está disponible.', 'error');
+    if (!venta) {
+        showToast('No se encontró la venta para generar el PDF.', 'error');
+        btn.disabled = false;
+        btn.textContent = originalText;
+        return;
+    }
+
+    const tasaFinal = (paraleloRate > 0) ? paraleloRate : (oficialRate > 0 ? oficialRate : (tasaSettings.paralelo.value || 1));
+    try {
+        await generarFacturaPDF(venta, tasaFinal, productosCache);
+    } catch (error) {
+        console.error('Error al generar el PDF:', error);
+        showToast('Error al generar el PDF.', 'error');
+    } finally {
         btn.disabled = false;
         btn.textContent = originalText;
     }
@@ -2693,61 +3544,67 @@ async function handleAbrirModalVenta() {
         return;
     }
     await obtenerTasas();
-    
+
     totalVentaActual = productosParaLlevar.reduce((acc, item) => acc + (item.precio_venta_dolares_bcv * item.cantidadLlevar), 0);
-    totalVentaActual = parseFloat(totalVentaActual.toFixed(2)); // Redondear a 2 decimales para el total de la venta
     const totalBs = totalVentaActual * oficialRate;
-    
+    totalVentaEfectivo = productosParaLlevar.reduce((acc, item) => acc + (item.venta_$_efectivo * item.cantidadLlevar), 0);
     // Definir qué métodos de pago son en Bolívares y cuáles en Dólares
     const metodosEnBolivares = ['Pago Móvil', 'Bolívares en efectivo'];
 
     const paymentContainer = document.getElementById('paymentMethodsContainer');
-    paymentContainer.innerHTML = METODOS_DE_PAGO.map(metodo => {
-        const id = metodo.toLowerCase().replace(/ /g, '_').replace('ó','o');
-        const isBsMethod = metodosEnBolivares.includes(metodo);
-        const currencyLabel = isBsMethod ? 'Bs' : '$';
-        const inputStep = isBsMethod ? '0.01' : '0.01'; // Ambos pueden tener decimales
-        const placeholderText = `Monto en ${currencyLabel}`;
+    if (paymentContainer) {
+        paymentContainer.innerHTML = METODOS_DE_PAGO.map(metodo => {
+            const id = metodo.toLowerCase().replace(/ /g, '_').replace('ó', 'o');
+            const isBsMethod = metodosEnBolivares.includes(metodo);
+            const currencyLabel = isBsMethod ? 'Bs' : '$';
+            const inputStep = isBsMethod ? '0.01' : '0.01'; // Ambos pueden tener decimales
+            const placeholderText = `Monto en ${currencyLabel}`;
 
-        return `
-            <div class="payment-method-row">
-                <div class="payment-method-selector">
-                    <input type="checkbox" id="check_${id}" data-method-id="${id}">
-                    <label for="check_${id}">${metodo} (${currencyLabel})</label>
+            return `
+                <div class="payment-method-row">
+                    <div class="payment-method-selector">
+                        <input type="checkbox" id="check_${id}" data-method-id="${id}">
+                        <label for="check_${id}">${metodo} (${currencyLabel})</label>
+                    </div>
+                    <div class="payment-method-input" id="input_container_${id}" style="display: none;">
+                        <input type="number" class="payment-amount-input" step="${inputStep}" placeholder="${placeholderText}" id="amount_${id}" data-method-name="${metodo}" data-currency="${isBsMethod ? 'BS' : 'USD'}">
+                        <button type="button" class="action-btn btn-blue btn-fill-remaining" data-target-id="${id}">FULL</button>
+                    </div>
                 </div>
-                <div class="payment-method-input" id="input_container_${id}" style="display: none;">
-                    <input type="number" class="payment-amount-input" step="${inputStep}" placeholder="${placeholderText}" id="amount_${id}" data-method-name="${metodo}" data-currency="${isBsMethod ? 'BS' : 'USD'}">
-                    <button type="button" class="action-btn btn-blue btn-fill-remaining" data-target-id="${id}">FULL</button>
-                </div>
-            </div>
-        `;
-    }).join('');
+            `;
+        }).join('');
+    }
 
-    // Añadir listener de 'blur' a los inputs de monto para formatear a dos decimales
-    // y asegurar que el valor sea '0.00' si se deja vacío.
-    document.querySelectorAll('.payment-amount-input').forEach(input => {
-        input.addEventListener('blur', () => {
-            let value = parseFloat(input.value);
-            if (!isNaN(value)) {
-                input.value = value.toFixed(2);
-            } else if (input.value.trim() === '') {
-                input.value = '0.00'; // Si se deja vacío, mostrar '0.00'
-            }
-            updatePaymentSummary(); // Recalcular el resumen después de formatear
-        });
-    });
+    // Resetear la visibilidad y etiquetas de los totales al abrir el modal.
+    const lblUsd = document.getElementById('modalTotalUsdLabel');
+    if (lblUsd) lblUsd.textContent = 'Total a Pagar $ (bcv):';
+    const rowUsd = document.getElementById('modalTotalUsdRow');
+    if (rowUsd) rowUsd.style.display = 'flex';
+    const rowBs = document.getElementById('modalTotalBsRow');
+    if (rowBs) rowBs.style.display = 'flex';
+    const rowEf = document.getElementById('modalTotalEfectivoRow');
+    if (rowEf) rowEf.style.display = 'flex';
 
-    document.getElementById('formDatosCliente').reset();
+    const formCliente = document.getElementById('formDatosCliente');
+    if (formCliente) formCliente.reset();
     document.querySelectorAll('.payment-amount-input').forEach(input => input.value = '');
     document.querySelectorAll('.payment-method-selector input[type="checkbox"]').forEach(check => check.checked = false);
     document.querySelectorAll('.payment-method-input').forEach(container => container.style.display = 'none');
 
     const totalUsd = totalVentaActual;
-    document.getElementById('modalTotalUsd').textContent = `$ ${formatCurrency(totalUsd)}`;
-    document.getElementById('modalTotalBs').textContent = `Bs ${formatCurrency(totalBs)}`;
-    document.getElementById('lblTasaBcvBase').textContent = formatCurrency(oficialRate);
+    const modalUsd = document.getElementById('modalTotalUsd');
+    if (modalUsd) modalUsd.textContent = `$ ${formatCurrency(totalUsd)}`;
+    const modalBs = document.getElementById('modalTotalBs');
+    if (modalBs) modalBs.textContent = `Bs ${formatCurrency(totalBs)}`;
+    const modalDol = document.getElementById('modalTotal$');
+    if (modalDol) modalDol.textContent = `$ ${formatCurrency(totalVentaEfectivo)}`;
+    const lblTasa = document.getElementById('lblTasaBcvBase');
+    if (lblTasa) lblTasa.textContent = formatCurrency(oficialRate);
+    const lblTasaPar = document.getElementById('lblTasaParaleloBase');
+    if (lblTasaPar) lblTasaPar.textContent = formatCurrency(paraleloRate);
 
     const modal = document.getElementById('modalVenta');
+    if (!modal) return;
     const footer = modal.querySelector('.modal-footer, .modal-buttons');
 
     // Contenedor para acciones del lado izquierdo del footer del modal
@@ -2763,9 +3620,9 @@ async function handleAbrirModalVenta() {
     if (!leftActionsContainer.querySelector('#emitirFacturaContainer')) {
         const checkboxContainer = document.createElement('div');
         checkboxContainer.id = 'emitirFacturaContainer';
-        checkboxContainer.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+        checkboxContainer.className = 'checkbox-action-container';
         checkboxContainer.innerHTML = `
-            <input type="checkbox" id="emitirFacturaCheckbox" style="width: 18px; height: 18px; cursor: pointer;">
+            <input type="checkbox" id="emitirFacturaCheckbox">
             <label for="emitirFacturaCheckbox" style="font-weight: 600; cursor: pointer; user-select: none;">Emitir factura</label>
         `;
         leftActionsContainer.appendChild(checkboxContainer);
@@ -2775,9 +3632,9 @@ async function handleAbrirModalVenta() {
     if (!leftActionsContainer.querySelector('#pagoPendienteContainer')) {
         const pendienteContainer = document.createElement('div');
         pendienteContainer.id = 'pagoPendienteContainer';
-        pendienteContainer.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+        pendienteContainer.className = 'checkbox-action-container';
         pendienteContainer.innerHTML = `
-            <input type="checkbox" id="pagoPendienteCheckbox" style="width: 18px; height: 18px; cursor: pointer;">
+            <input type="checkbox" id="pagoPendienteCheckbox" class="pago-pendiente-check">
             <label for="pagoPendienteCheckbox" style="font-weight: 600; cursor: pointer; user-select: none; color: var(--btn-orange);">Pago pendiente (crédito)</label>
         `;
         leftActionsContainer.appendChild(pendienteContainer);
@@ -2795,6 +3652,7 @@ async function handleAbrirModalVenta() {
         if (e.target.classList.contains('payment-amount-input')) updatePaymentSummary();
     });
 
+    updatePaymentSummary();
     modal.classList.add('active');
 }
 
@@ -2804,11 +3662,28 @@ document.getElementById('formDatosCliente')?.addEventListener('submit', async (e
     const tipoCedula = document.getElementById('cliTipoCedula').value;
     const numeroCedula = document.getElementById('cliCedula').value.trim();
     const cedulaCompleta = `${tipoCedula}-${numeroCedula}`;
-    const telefono = document.getElementById('cliTelefono').value.trim();
+
+    const codTelefono = document.getElementById('cliCodTelefono')?.value || '0414';
+    const numTelefono = document.getElementById('cliTelefono')?.value.trim() || '';
+    const telefono = numTelefono ? `${codTelefono}${numTelefono}` : '';
     const direccion = document.getElementById('cliDireccion').value.trim();
 
     if (numeroCedula.length > 10) { showToast('La cédula no puede exceder los 10 dígitos.', 'error'); return; }
-    if (telefono.length > 16) { showToast('El teléfono no puede exceder los 16 dígitos.', 'error'); return; }
+    if (numTelefono && numTelefono.length > 7) { showToast('El teléfono no puede exceder los 7 dígitos tras el código.', 'error'); return; }
+
+    const activeMethodNames = [];
+    document.querySelectorAll('#paymentMethodsContainer input[type="checkbox"]:checked').forEach(check => {
+        const id = check.dataset.methodId;
+        const amountInput = document.getElementById(`amount_${id}`);
+        if (amountInput) {
+            activeMethodNames.push(amountInput.dataset.methodName);
+        }
+    });
+
+    const metodosEnEfectivo = ['Binance', 'Dólares en efectivo', 'Zelle'];
+    const useEfectivoTotal = activeMethodNames.some(name => metodosEnEfectivo.includes(name));
+    const currentRate = useEfectivoTotal ? ((paraleloRate > 0) ? paraleloRate : (oficialRate > 0 ? oficialRate : 1)) : ((oficialRate > 0) ? oficialRate : 1);
+    const totalDeVentaApplicable = useEfectivoTotal ? totalVentaEfectivo : totalVentaActual;
 
     const pagos = [];
     document.querySelectorAll('.payment-method-selector input[type="checkbox"]:checked').forEach(check => {
@@ -2819,13 +3694,15 @@ document.getElementById('formDatosCliente')?.addEventListener('submit', async (e
         let amountInUsd = amount;
 
         if (inputCurrency === 'BS') {
-            amountInUsd = amount / oficialRate; // Convertir Bs a USD
+            amountInUsd = currentRate > 0 ? (amount / currentRate) : 0; // Convertir Bs a USD con la tasa activa
         }
 
         if (amountInUsd > 0) {
             pagos.push({
                 metodo: amountInput.dataset.methodName,
-                monto: amountInUsd // Siempre guardar el monto en USD
+                monto: amountInUsd, // Monto equivalente en USD
+                monto_original: amount, // Monto exacto ingresado en moneda original (ej. 5000 en Bs o 15 en USD)
+                moneda: inputCurrency // 'BS' o 'USD'
             });
         }
     });
@@ -2840,23 +3717,23 @@ document.getElementById('formDatosCliente')?.addEventListener('submit', async (e
     const btnSubmit = document.getElementById('btnConfirmarVenta');
     btnSubmit.disabled = true;
     btnSubmit.textContent = 'Procesando...';
-    
+
     try {
         const emitirFactura = document.getElementById('emitirFacturaCheckbox')?.checked || false;
         const pagoPendiente = document.getElementById('pagoPendienteCheckbox')?.checked || false;
 
         const totalPagadoValidacion = pagos.reduce((sum, p) => sum + p.monto, 0);
-        
+
         // Solo validar la coincidencia de pago si NO es un pago pendiente
-        if (!pagoPendiente && Math.abs(totalVentaActual - totalPagadoValidacion) > 0.01) {
+        if (!pagoPendiente && Math.abs(totalDeVentaApplicable - totalPagadoValidacion) > 0.01) {
             showToast('El total pagado no coincide con el total de la venta. Revisa los montos.', 'error');
             btnSubmit.disabled = false;
             btnSubmit.textContent = 'Procesar Pago';
             return;
         }
 
-        const totalUsd = totalVentaActual;
-        const totalBs = totalUsd * oficialRate;
+        const totalUsd = totalDeVentaApplicable; // Usar el total aplicable (BCV o Efectivo)
+        const totalBs = totalUsd * currentRate; // El total en BS se basa en la tasa aplicable
 
         const ventaInsertData = { cliente_nombre: nombre, cliente_cedula: cedulaCompleta, cliente_telefono: telefono, cliente_direccion: direccion, tipo_pago: tipoPago, total_usd: totalUsd, total_bs: totalBs, estado_pago: pagoPendiente ? 'pendiente' : 'pagado' };
 
@@ -2870,7 +3747,14 @@ document.getElementById('formDatosCliente')?.addEventListener('submit', async (e
 
         for (const item of productosParaLlevar) {
             // CORRECCIÓN: Guardar el precio_unitario correcto y un tipo de precio consistente
-            const { error: detalleError } = await _supabase.from('detalle_ventas').insert([{ venta_id: ventaId, producto_codigo: item.codigo, producto_nombre: item.nombre, cantidad: item.cantidadLlevar, precio_unitario: item.precio_venta_dolares_bcv, tipo_precio_usado: 'BCV' }]);
+            let priceToStoreInDetails;
+            if (useEfectivoTotal) {
+                priceToStoreInDetails = item.venta_$_efectivo;
+            } else {
+                priceToStoreInDetails = item.precio_venta_dolares_bcv;
+            }
+
+            const { error: detalleError } = await _supabase.from('detalle_ventas').insert([{ venta_id: ventaId, producto_codigo: item.codigo, producto_nombre: item.nombre, cantidad: item.cantidadLlevar, precio_unitario: priceToStoreInDetails, tipo_precio_usado: useEfectivoTotal ? 'EFECTIVO' : 'BCV' }]);
             if (detalleError) throw detalleError;
             if (!item.esAdicional) {
                 const nuevoStock = item.cantidad - item.cantidadLlevar;
@@ -2896,7 +3780,7 @@ document.getElementById('formDatosCliente')?.addEventListener('submit', async (e
                     producto_nombre: item.nombre,
                     cantidad: item.cantidadLlevar,
                     // CORRECCIÓN: Pasar el precio_unitario correcto al PDF
-                    precio_unitario: item.precio_venta_dolares_bcv,
+                    precio_unitario: priceToStoreInDetails, // Pass the stored price
                 }))
             };
             await generarFacturaPDF(ventaCompleta, paraleloRate, productosCache);
@@ -2909,7 +3793,7 @@ document.getElementById('formDatosCliente')?.addEventListener('submit', async (e
         renderizarParaLlevar();
         socket.emit('cambio-dato', { type: 'products' });
         socket.emit('cambio-dato', { type: 'ventas' });
-        
+
         // Refrescar la vista actual de forma inteligente
         const vistaActiva = document.querySelector('.nav-btn.active').textContent.trim().toLowerCase();
         if (vistaActiva === 'caja') {
@@ -2939,7 +3823,7 @@ async function initModalCategorias() {
     modal.dataset.listenersAttached = 'true';
 
     document.getElementById('catBuscar').addEventListener('input', (e) => renderizarListaCategorias(e.target.value));
-    
+
     document.getElementById('btnAgregarCat').addEventListener('click', async () => {
         const nombre = document.getElementById('catNombre').value.trim();
         if (!nombre) {
@@ -2971,7 +3855,7 @@ async function initModalCategorias() {
             showToast('Categoría no encontrada en caché.', 'error');
             return;
         }
-        
+
         showConfirmation(`¿Confirmas el cambio de nombre a "${nuevoNombre}"?`, async () => {
             const { error } = await _supabase.from('categorias').update({ nombre: nuevoNombre }).eq('id', catId);
             if (error) {
@@ -3071,7 +3955,7 @@ async function initModalMarcas() {
     document.getElementById('closeModalMarcaBtn').addEventListener('click', () => modal.classList.remove('active'));
 
     document.getElementById('marcaBuscar').addEventListener('input', (e) => renderizarListaMarcas(e.target.value));
-    
+
     document.getElementById('btnAgregarMarca').addEventListener('click', async () => {
         const nombre = document.getElementById('marcaNombre').value.trim();
         if (!nombre) {
@@ -3295,6 +4179,14 @@ async function initModalProducto() {
     if (form) {
         setProductModalMode('manual');
         form.reset(); // Limpiar el formulario
+        const calcCosto = document.getElementById('calcCostoUsdt');
+        const calcDesc = document.getElementById('calcDescuento');
+        const calcGan = document.getElementById('calcGanancia');
+        if (calcCosto) calcCosto.value = '';
+        if (calcDesc) calcDesc.value = '';
+        if (calcGan) calcGan.value = '';
+        const calcRes = document.getElementById('calculator-results');
+        if (calcRes) calcRes.style.display = 'none';
     }
 }
 
@@ -3446,12 +4338,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     <label for="marcaNombre">Nombre de la Marca</label>
                     <input type="text" id="marcaNombre" placeholder="Ej: Total Repuestos"><input type="hidden" id="marcaId">
                 </div>
-                <div class="field-group">
-                    <label for="marcaBuscar">Buscar Marca</label>
-                    <input type="text" id="marcaBuscar" placeholder="Filtrar marcas...">
+                <div class="modal-buttons categoria-management" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: center;">
+                    <button id="btnAgregarMarca" class="action-btn btn-green">Agregar</button>
+                    <button id="btnEditarMarca" class="action-btn btn-edit">Editar</button>
+                    <button id="btnEliminarMarca" class="action-btn btn-del">Eliminar</button>
+                    <input type="text" id="marcaBuscar" placeholder="Filtrar marcas..." style="grid-column: 1 / -1; width: 100%; padding-left: 12px;">
                 </div>
                 <ul id="listaMarcas" class="cat-list"></ul>
-                <div class="modal-buttons"><button id="btnAgregarMarca" class="action-btn btn-green">Agregar</button><button id="btnEditarMarca" class="action-btn btn-edit">Editar</button><button id="btnEliminarMarca" class="action-btn btn-del">Eliminar</button></div>
             </div>
         </div>
     </div>`;
@@ -3464,9 +4357,55 @@ document.addEventListener('DOMContentLoaded', () => {
         sidebarOverlay.addEventListener('click', toggleSidebar);
     }
 
+    // --- MANEJADOR DE ANIMACIÓN SUAVE PARA MENÚS DESPLEGABLES (<details>) ---
+    document.addEventListener('click', (e) => {
+        const summary = e.target.closest('details.tools-dropdown > summary, details > summary');
+        if (!summary) return;
+        const details = summary.parentElement;
+        if (details && details.hasAttribute('open') && !details.classList.contains('is-closing')) {
+            e.preventDefault();
+            details.classList.add('is-closing');
+            setTimeout(() => {
+                details.removeAttribute('open');
+                details.classList.remove('is-closing');
+            }, 140);
+        }
+    });
+
+    // --- SOPORTE DE INSTALACIÓN PWA (Android / iOS / Desktop) ---
+    let deferredInstallPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+        const btnInstalar = document.getElementById('btnInstalarPwa');
+        if (btnInstalar) {
+            btnInstalar.style.display = 'inline-flex';
+        }
+    });
+
+    document.addEventListener('click', async (e) => {
+        const installBtn = e.target.closest('#btnInstalarPwa');
+        if (!installBtn) return;
+        if (deferredInstallPrompt) {
+            deferredInstallPrompt.prompt();
+            const { outcome } = await deferredInstallPrompt.userChoice;
+            if (outcome === 'accepted') {
+                showToast('¡TOTAL REPUESTOS C&S instalada!', 'success');
+            }
+            deferredInstallPrompt = null;
+        } else {
+            showToast('Para instalar en Android: pulsa el menú (⋮) en tu navegador y selecciona "Instalar aplicación" o "Añadir a pantalla de inicio".', 'info');
+        }
+    });
+
+    window.addEventListener('appinstalled', () => {
+        showToast('¡TOTAL REPUESTOS C&S instalada correctamente en tu dispositivo!', 'success');
+        deferredInstallPrompt = null;
+    });
+
     obtenerTasas();
     setInterval(obtenerTasas, 300000); // Actualizar cada 5 minutos
-    
+
     // Cargar la vista de inicio por defecto
     cargarVista('inicio');
 
@@ -3479,32 +4418,60 @@ document.addEventListener('DOMContentLoaded', () => {
             const mode = formProducto.dataset.mode || 'manual';
 
             let precioCostoDolaresBcv, precioVentaDolaresBcv, ventaDolaresEfectivo, costoDolaresEfectivo;
-            let calc_costo_usdt = null, calc_descuento = null, calc_ganancia = null;
+            let calc_costo_$_efectivo = null, calc_descuento = null, calc_ganancia = null;
 
             if (mode === 'calculator') {
-                const costoProductoUsdt = parseFloat(document.getElementById('calcCostoUsdt').value) || 0;
-                const descuento = parseFloat(document.getElementById('calcDescuento').value) || 0;
-                const ganancia = parseFloat(document.getElementById('calcGanancia').value) || 0;
-                if (costoProductoUsdt <= 0 || ganancia < 0 || paraleloRate <= 0 || oficialRate <= 0) {
-                    showToast('Costo, ganancia y tasas son requeridos.', 'error'); return;
+                let precioProv = parseFloat(document.getElementById('calcCostoUsdt')?.value);
+                const porcProv = parseFloat(document.getElementById('calcDescuento')?.value) || 0;
+                const porcVenta = parseFloat(document.getElementById('calcGanancia')?.value) || 0;
+
+                // Si precioProv está vacío o es 0, buscar en los campos manuales como respaldo
+                if (isNaN(precioProv) || precioProv <= 0) {
+                    precioProv = parseFloat(document.getElementById('prodCostoDolaresEfectivo')?.value) ||
+                        parseFloat(document.getElementById('prodCostoDolaresBcv')?.value) || 0;
                 }
-                const valorConDescuento = costoProductoUsdt * (1 - (descuento / 100)); // Costo USDT con descuento
-                const costoEnBolivares = valorConDescuento * paraleloRate;
-                precioCostoDolaresBcv = costoEnBolivares / oficialRate;
-                precioVentaDolaresBcv = precioCostoDolaresBcv * (1 + (ganancia / 100));
-                ventaDolaresEfectivo = valorConDescuento;
-                costoDolaresEfectivo = costoProductoUsdt; // El costo en efectivo es el costo USDT original
-                calc_costo_usdt = costoProductoUsdt;
-                calc_descuento = descuento;
-                calc_ganancia = ganancia;
+
+                if (precioProv <= 0) {
+                    showToast('Ingresa un precio de proveedor válido mayor a 0.', 'error');
+                    return;
+                }
+
+                const calculados = calcularPreciosPorcentaje(precioProv, porcProv, porcVenta);
+                costoDolaresEfectivo = calculados.costoEfectivo;
+                ventaDolaresEfectivo = calculados.ventaEfectivo;
+                precioCostoDolaresBcv = calculados.costoUsdBcv;
+                precioVentaDolaresBcv = calculados.ventaUsdBcv;
+
+                calc_costo_$_efectivo = precioProv;
+                calc_descuento = porcProv;
+                calc_ganancia = porcVenta;
+
+                // Sincronizar también inputs manuales
+                const prodCostoEf = document.getElementById('prodCostoDolaresEfectivo');
+                const prodVentaEf = document.getElementById('prodUsdt');
+                const prodCostoBcv = document.getElementById('prodCostoDolaresBcv');
+                const prodVentaBcv = document.getElementById('prodVentaDolaresBcv');
+                if (prodCostoEf) prodCostoEf.value = costoDolaresEfectivo;
+                if (prodVentaEf) prodVentaEf.value = ventaDolaresEfectivo;
+                if (prodCostoBcv) prodCostoBcv.value = precioCostoDolaresBcv;
+                if (prodVentaBcv) prodVentaBcv.value = precioVentaDolaresBcv;
             } else { // manual
                 precioCostoDolaresBcv = parseFloat(document.getElementById('prodCostoDolaresBcv').value) || 0;
                 costoDolaresEfectivo = parseFloat(document.getElementById('prodCostoDolaresEfectivo').value) || 0;
                 precioVentaDolaresBcv = parseFloat(document.getElementById('prodVentaDolaresBcv').value) || 0;
                 ventaDolaresEfectivo = parseFloat(document.getElementById('prodUsdt').value) || 0;
+
                 if (precioVentaDolaresBcv <= 0 || precioCostoDolaresBcv < 0 || ventaDolaresEfectivo <= 0 || costoDolaresEfectivo < 0) {
-                    showToast('Los precios de venta deben ser mayores a cero y los costos no pueden ser negativos.', 'error'); return;
+                    showToast('Los precios de venta deben ser mayores a cero y los costos no pueden ser negativos.', 'error');
+                    return;
                 }
+
+                const valCosto = parseFloat(document.getElementById('calcCostoUsdt')?.value);
+                const valDesc = parseFloat(document.getElementById('calcDescuento')?.value);
+                const valGan = parseFloat(document.getElementById('calcGanancia')?.value);
+                calc_costo_$_efectivo = !isNaN(valCosto) && valCosto > 0 ? valCosto : (editCodigo && productoSeleccionado ? (productoSeleccionado.calc_costo_$_efectivo ?? null) : null);
+                calc_descuento = !isNaN(valDesc) ? valDesc : (editCodigo && productoSeleccionado ? (productoSeleccionado.calc_descuento ?? null) : null);
+                calc_ganancia = !isNaN(valGan) ? valGan : (editCodigo && productoSeleccionado ? (productoSeleccionado.calc_ganancia ?? null) : null);
             }
 
             // Determinar la cantidad final
@@ -3514,7 +4481,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const cantidadIngresada = parseInt(document.getElementById('prodCantidad').value, 10) || 0;
                 cantidadFinal = cantidadActual + cantidadIngresada;
             } else {
-                cantidadFinal = parseInt(document.getElementById('prodCantidad').value, 10);
+                cantidadFinal = parseInt(document.getElementById('prodCantidad').value, 10) || 0;
             }
 
             const marcaFinal = document.getElementById('prodMarca').value;
@@ -3525,14 +4492,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 marca: marcaFinal,
                 ubicacion: document.getElementById('prodUbicacion').value.trim(),
                 cantidad: cantidadFinal,
-                precio_costo_dolares_bcv: precioCostoDolaresBcv,
-                precio_venta_dolares_bcv: precioVentaDolaresBcv,
-                venta_$_efectivo: ventaDolaresEfectivo,
-                costo_$_efectivo: costoDolaresEfectivo,
+                precio_costo_dolares_bcv: parseFloat(precioCostoDolaresBcv) || 0,
+                precio_venta_dolares_bcv: parseFloat(precioVentaDolaresBcv) || 0,
+                venta_$_efectivo: parseFloat(ventaDolaresEfectivo) || 0,
+                costo_$_efectivo: parseFloat(costoDolaresEfectivo) || 0,
                 modo_creacion: mode,
-                calc_costo_usdt: calc_costo_usdt,
-                calc_descuento: calc_descuento,
-                calc_ganancia: calc_ganancia
+                calc_costo_$_efectivo: calc_costo_$_efectivo !== null ? (parseFloat(calc_costo_$_efectivo) || 0) : null,
+                calc_descuento: calc_descuento !== null ? (parseFloat(calc_descuento) || 0) : null,
+                calc_ganancia: calc_ganancia !== null ? (parseFloat(calc_ganancia) || 0) : null
             };
 
             const nuevoCodigo = document.getElementById('prodCodigo').value.trim();
@@ -3564,21 +4531,67 @@ document.addEventListener('DOMContentLoaded', () => {
                 const { error: insertError } = await _supabase.from('productos').insert([productData]);
                 error = insertError;
             }
-            
+
             if (error) {
                 showToast(`Error al guardar el producto: ${error.message}`, 'error');
                 return;
             }
 
+            // Actualizar el cache local si se editó
+            if (editCodigo) {
+                const idx = productosCache.findIndex(p => p.codigo === editCodigo);
+                if (idx !== -1) {
+                    productosCache[idx] = { ...productosCache[idx], ...productData };
+                }
+                if (productoSeleccionado && productoSeleccionado.codigo === editCodigo) {
+                    productoSeleccionado = { ...productoSeleccionado, ...productData };
+                }
+            }
+
             document.getElementById('formProducto').reset();
             document.getElementById('modalProducto').classList.remove('active');
             showToast(editCodigo ? 'Producto actualizado con éxito.' : 'Producto guardado con éxito.', 'success');
-    
-            if (document.querySelector('.nav-btn.active').textContent.trim().toLowerCase() === 'inventario de productos') {
-                loadProducts();
-            }
-    
+
+            loadProducts();
+
             socket.emit('cambio-dato', { type: 'products' });
+        });
+
+        // Escuchar cambios en los inputs de la calculadora para recalcular en tiempo real
+        ['calcCostoUsdt', 'calcDescuento', 'calcGanancia'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', () => {
+                    const precioProv = parseFloat(document.getElementById('calcCostoUsdt')?.value) || 0;
+                    const porcProv = parseFloat(document.getElementById('calcDescuento')?.value) || 0;
+                    const porcVenta = parseFloat(document.getElementById('calcGanancia')?.value) || 0;
+                    if (precioProv > 0) {
+                        const calculados = calcularPreciosPorcentaje(precioProv, porcProv, porcVenta);
+
+                        const resCostoEf = document.getElementById('resCostoEfectivo');
+                        const resCostoBcv = document.getElementById('resCostoBcv');
+                        const resVentaBcv = document.getElementById('resVentaBcv');
+                        const resVentaEf = document.getElementById('resVentaUsdt');
+                        const calcResults = document.getElementById('calculator-results');
+
+                        if (resCostoEf) resCostoEf.textContent = `$ ${formatCurrency(calculados.costoEfectivo)}`;
+                        if (resCostoBcv) resCostoBcv.textContent = `$ ${formatCurrency(calculados.costoUsdBcv)}`;
+                        if (resVentaBcv) resVentaBcv.textContent = `$ ${formatCurrency(calculados.ventaUsdBcv)}`;
+                        if (resVentaEf) resVentaEf.textContent = `$ ${formatCurrency(calculados.ventaEfectivo)}`;
+                        if (calcResults) calcResults.style.display = 'block';
+
+                        const prodCostoEf = document.getElementById('prodCostoDolaresEfectivo');
+                        const prodVentaEf = document.getElementById('prodUsdt');
+                        const prodCostoBcv = document.getElementById('prodCostoDolaresBcv');
+                        const prodVentaBcv = document.getElementById('prodVentaDolaresBcv');
+
+                        if (prodCostoEf) prodCostoEf.value = calculados.costoEfectivo;
+                        if (prodVentaEf) prodVentaEf.value = calculados.ventaEfectivo;
+                        if (prodCostoBcv) prodCostoBcv.value = calculados.costoUsdBcv;
+                        if (prodVentaBcv) prodVentaBcv.value = calculados.ventaUsdBcv;
+                    }
+                });
+            }
         });
     } else {
         console.error("Error: El formulario con id 'formProducto' no fue encontrado al cargar la página.");
@@ -3593,20 +4606,20 @@ document.addEventListener('DOMContentLoaded', () => {
             let codigo = document.getElementById('adicCodigo').value.trim() || ('ADIC-' + Math.floor(1000 + Math.random() * 9000));
             const cantidad = parseInt(document.getElementById('adicCantidad').value, 10);
             const precioVenta = parseFloat(document.getElementById('adicPrecioVenta').value);
-    
+
             // Para un producto adicional, el costo y la venta son iguales para simplificar
-            productosParaLlevar.push({ 
-                nombre, 
-                codigo, 
-                cantidad: 9999, 
-                precio_venta_dolares_bcv: precioVenta, 
-                precio_costo_dolares_bcv: precioVenta, 
-                venta_$_efectivo: precioVenta, 
+            productosParaLlevar.push({
+                nombre,
+                codigo,
+                cantidad: 9999,
+                precio_venta_dolares_bcv: precioVenta,
+                precio_costo_dolares_bcv: precioVenta,
+                venta_$_efectivo: precioVenta,
                 costo_$_efectivo: precioVenta,
-                cantidadLlevar: cantidad, 
-                esAdicional: true 
+                cantidadLlevar: cantidad,
+                esAdicional: true
             });
-            
+
             renderizarParaLlevar();
             document.getElementById('formAdicional').reset();
             document.getElementById('modalAdicional').classList.remove('active');
@@ -3697,12 +4710,27 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.textContent = 'Guardando...';
 
             const ventaId = document.getElementById('editVentaId').value;
-            const totalDeLaVenta = parseFloat(document.getElementById('editVentaTotalUsd').value);
+            const totalBcvAmount = parseFloat(document.getElementById('editVentaTotalUsd').value) || 0;
+            const totalEfectivoAmount = parseFloat(document.getElementById('editVentaTotalEfectivo')?.value) || 0;
             const tipoCedula = document.getElementById('editCliTipoCedula').value;
             const numeroCedula = document.getElementById('editCliCedula').value.trim();
             const cedulaCompleta = `${tipoCedula}-${numeroCedula}`;
 
             const pagoPendiente = document.getElementById('editPagoPendienteCheckbox')?.checked || false; // Obtener estado del checkbox
+
+            const activeMethodNames = [];
+            document.querySelectorAll('#editPaymentMethodsContainer input[type="checkbox"]:checked').forEach(check => {
+                const id = check.dataset.editMethodId;
+                const amountInput = document.getElementById(`amount_${id}`);
+                if (amountInput) {
+                    activeMethodNames.push(amountInput.dataset.methodName);
+                }
+            });
+
+            const metodosEnEfectivo = ['Binance', 'Dólares en efectivo', 'Zelle'];
+            const useEfectivoTotal = activeMethodNames.some(name => metodosEnEfectivo.includes(name));
+            const currentRate = useEfectivoTotal ? ((paraleloRate > 0) ? paraleloRate : (oficialRate > 0 ? oficialRate : 1)) : ((oficialRate > 0) ? oficialRate : 1);
+            const totalDeLaVenta = useEfectivoTotal ? (totalEfectivoAmount > 0 ? totalEfectivoAmount : totalBcvAmount) : totalBcvAmount;
 
             // Recolectar los nuevos datos de pago
             const nuevosPagos = [];
@@ -3712,14 +4740,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 let amount = parseFloat(amountInput.value) || 0;
                 let amountInUsd = amount;
 
-                if (amountInput.dataset.currency === 'BS' && oficialRate > 0) {
-                    amountInUsd = amount / oficialRate;
+                if (amountInput.dataset.currency === 'BS') {
+                    amountInUsd = currentRate > 0 ? (amount / currentRate) : 0;
                 }
 
                 if (amountInUsd > 0) {
                     nuevosPagos.push({
                         metodo: amountInput.dataset.methodName,
-                        monto: parseFloat(amountInUsd.toFixed(2))
+                        monto: amountInUsd
                     });
                 }
             });
@@ -3734,14 +4762,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            const editCodTelefono = document.getElementById('editCliCodTelefono')?.value || '0414';
+            const editNumTelefono = document.getElementById('editCliTelefono')?.value.trim() || '';
+            const editTelefono = editNumTelefono ? `${editCodTelefono}${editNumTelefono}` : '';
+
             const nuevoEstadoPago = pagoPendiente ? 'pendiente' : 'pagado';
 
             const updatedData = {
                 cliente_nombre: document.getElementById('editCliNombre').value.trim(),
                 cliente_cedula: cedulaCompleta,
-                cliente_telefono: document.getElementById('editCliTelefono').value.trim(),
+                cliente_telefono: editTelefono,
                 cliente_direccion: document.getElementById('editCliDireccion').value.trim(),
                 tipo_pago: JSON.stringify(nuevosPagos),
+                total_usd: totalDeLaVenta,
+                total_bs: totalDeLaVenta * currentRate,
                 estado_pago: nuevoEstadoPago
             };
 
@@ -3751,7 +4785,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 showToast('Venta actualizada con éxito.', 'success');
                 document.getElementById('modalEditarVenta').classList.remove('active');
-                
+
                 cargarHistorialVentas();
                 socket.emit('cambio-dato', { type: 'ventas' });
 

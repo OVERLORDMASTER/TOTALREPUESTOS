@@ -6,7 +6,22 @@
     <title>TOTAL REPUESTOS C&S | Login</title>
     <link rel="stylesheet" href="style.css">
     <link rel="shortcut icon" href="/imagen/logo.png" type="image/x-icon">
+    <!-- PWA y soporte móvil para Android / iOS -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#121212">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="TOTAL REPUESTOS">
+    <link rel="apple-touch-icon" href="/imagen/logo.png">
     <script>
+        // Registrar Service Worker para soporte PWA e instalación en Android / Desktop
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(err => console.warn('SW error:', err));
+            });
+        }
+
         // Aplica el tema (claro/oscuro) guardado en localStorage para evitar el parpadeo.
         // Este script se ejecuta antes de que se renderice el body.
         const THEME_KEY = 'appTheme';
