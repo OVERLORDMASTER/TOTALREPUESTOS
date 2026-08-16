@@ -960,15 +960,6 @@ function formatTipoPagoBadges(tipoPagoRaw, totalBs = 0, totalUsd = 1) {
 
 // VENTAS
 function initVistaVentas() {
-    // Reemplazar la tabla estática por un contenedor para el acordeón dinámico
-    const contentArea = document.querySelector('#visor-modulos .content-area');
-    const oldTable = contentArea ? contentArea.querySelector('.tabla-ventas-container') : null;
-    if (oldTable) {
-        const accordionContainer = document.createElement('div');
-        accordionContainer.id = 'ventasAccordionContainer';
-        oldTable.parentNode.replaceChild(accordionContainer, oldTable);
-    }
-
     cargarHistorialVentas();
     document.getElementById('ventasSearch')?.addEventListener('input', (e) => {
         const term = e.target.value.toLowerCase().trim();

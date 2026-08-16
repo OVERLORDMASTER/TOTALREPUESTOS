@@ -757,13 +757,17 @@ header {
     }
 
     /* --- INICIO: Ajustes para la tabla de Ventas en móvil/tablet --- */
+    .venta-date-content.active,
     .venta-date-content {
-        overflow-x: auto; /* Permite el desplazamiento horizontal dentro de cada sección de día */
-        -webkit-overflow-scrolling: touch; /* Desplazamiento suave en iOS */
+        overflow-x: auto !important; /* Permite el desplazamiento horizontal dentro de cada sección de día */
+        -webkit-overflow-scrolling: touch !important; /* Desplazamiento suave en iOS/Android */
+        touch-action: pan-x pan-y !important;
     }
-    .tabla-ventas-container {
-        min-width: 950px; /* Ancho mínimo para forzar el scroll y mantener las columnas legibles */
-        overflow: visible; /* Anula el 'overflow: hidden' para que el scroll funcione */
+    .tabla-ventas-container,
+    .venta-date-content .tabla-ventas-container {
+        min-width: 1050px !important; /* Ancho mínimo para forzar el scroll y mantener las columnas legibles */
+        width: 100% !important;
+        display: table !important;
     }
     /* --- FIN: Ajustes para la tabla de Ventas en móvil/tablet --- */
 
@@ -1665,6 +1669,9 @@ header {
 .venta-date-content.active {
     opacity: 1;
     border-top-color: var(--border-color);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
 }
 
 .venta-date-content .tabla-ventas-container { 
@@ -1673,6 +1680,8 @@ header {
     margin: 0; 
     padding: 0; 
     width: 100%; 
+    min-width: 1050px;
+    table-layout: auto;
 }
 
 /* ==========================================================================
