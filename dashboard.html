@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -37,6 +38,7 @@
         document.documentElement.dataset.theme = savedTheme;
     </script>
 </head>
+
 <body>
 
     <!-- Imagen del logo para el PDF, oculta a la vista -->
@@ -57,7 +59,7 @@
             <button class="nav-btn">Reportes</button>
             <button class="nav-btn">Ajustes</button>
         </div>
-        
+
         <div class="exchange-rates-panel" id="exchangeRatesPanel">
             <div class="exchange-rate-item bcv">
                 <span class="exchange-rate-label">BCV:</span>
@@ -84,49 +86,55 @@
     <div class="content-overlay" id="content-overlay"></div>
 
     <div class="modal-overlay" id="modalVenta">
-        <div class="modal-container">
+        <div class="modal-container" style="max-width: 580px;">
             <div class="modal-header">
                 <h3>Finalizar Venta y Facturación</h3>
-                <button type="button" data-modal-close style="background:none; border:none; color:var(--text-muted); font-size:1.2rem; cursor:pointer;">&times;</button>
+                <button type="button" data-modal-close
+                    style="background:none; border:none; color:var(--text-muted); font-size:1.2rem; cursor:pointer;">&times;</button>
             </div>
             <form id="formDatosCliente" class="modal-body">
-                <div class="field-group">
-                    <label for="cliNombre">Nombre del Cliente *</label>
-                    <input type="text" id="cliNombre" required placeholder="Ej. Juan Pérez" autocomplete="off">
-                </div>
-
-                <div class="field-group">
-                    <label for="cliCedula">Cédula o RIF (Máx. 10 dígitos) *</label>
-                    <div style="display: flex; gap: 6px; align-items: center;">
-                        <select id="cliTipoCedula" style="width: 80px; flex-shrink: 0;" required>
-                            <option value="V">V</option>
-                            <option value="E">E</option>
-                            <option value="J">J</option>
-                            <option value="G">G</option>
-                        </select>
-                        <input type="text" id="cliCedula" maxlength="10" inputmode="numeric" pattern="[0-9]{1,10}" required placeholder="Ej. 12345678" autocomplete="off" style="flex: 1;">
-                        <button type="button" id="btnBuscarCliente" class="action-btn btn-blue" style="padding: 5px 12px; font-size: 0.8rem; font-weight: 600; white-space: nowrap;">Buscar</button>
+                <div class="form-grid-2col">
+                    <div class="field-group">
+                        <label for="cliNombre">Nombre del Cliente *</label>
+                        <input type="text" id="cliNombre" required autocomplete="off">
                     </div>
-                </div>
 
-                <div class="field-group">
-                    <label for="cliTelefono">Teléfono (opcional)</label>
-                    <div style="display: flex; gap: 6px; align-items: center;">
-                        <select id="cliCodTelefono" style="width: 90px; flex-shrink: 0;">
-                            <option value="0414">0414</option>
-                            <option value="0424">0424</option>
-                            <option value="0426">0426</option>
-                            <option value="0416">0416</option>
-                            <option value="0422">0422</option>
-                            <option value="0412">0412</option>
-                        </select>
-                        <input type="text" id="cliTelefono" maxlength="7" inputmode="numeric" pattern="[0-9]*" placeholder="Ej. 1234567" autocomplete="off" style="flex: 1;">
+                    <div class="field-group">
+                        <label for="cliCedula">Cédula o RIF (Máx. 10 dígitos) *</label>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <select id="cliTipoCedula" style="width: 75px; flex-shrink: 0;" required>
+                                <option value="V">V</option>
+                                <option value="E">E</option>
+                                <option value="J">J</option>
+                                <option value="G">G</option>
+                            </select>
+                            <input type="text" id="cliCedula" maxlength="10" inputmode="numeric" pattern="[0-9]{1,10}"
+                                required autocomplete="off" style="flex: 1; min-width: 0;">
+                            <button type="button" id="btnBuscarCliente" class="action-btn btn-blue"
+                                style="padding: 5px 12px; font-size: 0.8rem; font-weight: 600; white-space: nowrap;">Buscar</button>
+                        </div>
                     </div>
-                </div>
 
-                <div class="field-group">
-                    <label for="cliDireccion">Dirección (opcional)</label>
-                    <textarea id="cliDireccion" rows="2" placeholder="Dirección del cliente (opcional)" style="resize: none;"></textarea>
+                    <div class="field-group">
+                        <label for="cliTelefono">Teléfono (opcional)</label>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <select id="cliCodTelefono" style="width: 85px; flex-shrink: 0;">
+                                <option value="0414">0414</option>
+                                <option value="0424">0424</option>
+                                <option value="0426">0426</option>
+                                <option value="0416">0416</option>
+                                <option value="0422">0422</option>
+                                <option value="0412">0412</option>
+                            </select>
+                            <input type="text" id="cliTelefono" maxlength="7" inputmode="numeric" pattern="[0-9]*"
+                                autocomplete="off" style="flex: 1; min-width: 0;">
+                        </div>
+                    </div>
+
+                    <div class="field-group">
+                        <label for="cliDireccion">Dirección (opcional)</label>
+                        <input type="text" id="cliDireccion" autocomplete="off">
+                    </div>
                 </div>
 
                 <div class="field-group">
@@ -151,9 +159,11 @@
                             <span id="modalTotalEfectivoLabel">Total en pagar $ efectivo :</span>
                             <span id="modalTotal$" style="font-weight: bold; color: var(--btn-orange);">$ 0.00</span>
                         </div>
-                        <div class="modal-resumen-row" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+                        <div class="modal-resumen-row"
+                            style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-color);">
                             <span style="color: var(--btn-green);">Total Pagado ($):</span>
-                            <span id="modalTotalPagado" style="font-weight: bold; color: var(--btn-green);">$ 0.00</span>
+                            <span id="modalTotalPagado" style="font-weight: bold; color: var(--btn-green);">$
+                                0.00</span>
                         </div>
                         <div class="modal-resumen-row" id="modalFaltanteRow">
                             <span id="faltanteLabel" style="color: var(--btn-red);">Faltante ($):</span>
@@ -161,14 +171,16 @@
                         </div>
                         <div class="modal-tasas-grid">
                             <div>Tasa BCV: <span id="lblTasaBcvBase">0.00</span></div>
-                            <div>Tasa Paralelo: <span id="lblTasaParaleloBase">0.00</span></div>
                         </div>
                     </div>
                 </div>
 
                 <div class="modal-footer">
-                    <button type="button" data-modal-close class="action-btn" style="background: #475569; padding: 10px 18px; border: none; border-radius: 6px; color: white; cursor: pointer;">Cancelar</button>
-                    <button type="submit" id="btnConfirmarVenta" class="action-btn btn-green" style="padding: 10px 18px; border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: 600;">Procesar Pago</button>
+                    <button type="button" data-modal-close class="action-btn"
+                        style="background: #475569; padding: 10px 18px; border: none; border-radius: 6px; color: white; cursor: pointer;">Cancelar</button>
+                    <button type="submit" id="btnConfirmarVenta" class="action-btn btn-green"
+                        style="padding: 10px 18px; border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: 600;">Procesar
+                        Pago</button>
                 </div>
             </form>
         </div>
@@ -176,16 +188,18 @@
 
     <div class="modal-overlay" id="modalCategoria">
         <div class="modal">
-            <button type="button" class="action-btn btn-del" data-modal-close style="position: absolute; top: 20px; right: 20px; padding: 6px 14px; font-size: 0.85rem;">cerrar</button>
+            <button type="button" class="action-btn btn-del" data-modal-close
+                style="position: absolute; top: 20px; right: 20px; padding: 6px 14px; font-size: 0.85rem;">cerrar</button>
             <h3>Gestión de Categorías</h3>
             <div class="modal-form" id="formCategoria">
                 <input type="hidden" id="catId">
                 <div class="field-group"><label>Nombre</label><input type="text" id="catNombre"></div>
-                <div class="modal-buttons categoria-management" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: center;">
+                <div class="modal-buttons categoria-management"
+                    style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: center;">
                     <button type="button" class="action-btn btn-add" id="btnAgregarCat">Agregar</button>
                     <button type="button" class="action-btn btn-edit" id="btnEditarCat">Editar</button>
                     <button type="button" class="action-btn btn-del" id="btnEliminarCat">Eliminar</button>
-                    <input type="text" id="catBuscar" placeholder="buscar" style="grid-column: 1 / -1; width: 100%; padding-left: 12px;">
+                    <input type="text" id="catBuscar" placeholder="Buscar categoría..." style="grid-column: 1 / -1; width: 100%; padding-left: 12px;">
                 </div>
             </div>
             <div class="field-group">
@@ -197,26 +211,35 @@
 
     <div class="modal-overlay" id="modalProducto">
         <div class="modal" style="max-width: 550px;">
-            <button type="button" class="action-btn btn-del" data-modal-close style="position: absolute; top: 20px; right: 20px; padding: 6px 14px; font-size: 0.85rem;">cerrar</button>
+            <button type="button" class="action-btn btn-del" data-modal-close
+                style="position: absolute; top: 20px; right: 20px; padding: 6px 14px; font-size: 0.85rem;">cerrar</button>
             <h3>Cargar Nuevo Producto</h3>
-            <form class="modal-form" id="formProducto" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <form class="modal-form" id="formProducto"
+                style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                 <input type="hidden" id="prodEditCodigo">
                 <!-- Fila 1 -->
-                <div class="field-group"><label>Categoría</label><select id="prodCategoria" required><option value="">Selecciona...</option></select></div>
-                <div class="field-group"><label for="prodNombre">Nombre</label><input type="text" id="prodNombre" required></div>
+                <div class="field-group"><label>Categoría</label><select id="prodCategoria" required>
+                        <option value="">Selecciona...</option>
+                    </select></div>
+                <div class="field-group"><label for="prodNombre">Nombre</label><input type="text" id="prodNombre"
+                        required></div>
                 <!-- Fila 2 -->
                 <div class="field-group">
                     <label for="prodMarca">Marca</label>
-                    <select id="prodMarca"><option value="">-- Sin Marca --</option></select>
-                    <input type="text" id="prodMarcaNueva" placeholder="Escribe la nueva marca aquí" style="display: none; margin-top: 8px;">
+                    <select id="prodMarca">
+                        <option value="">-- Sin Marca --</option>
+                    </select>
+                    <input type="text" id="prodMarcaNueva" style="display: none; margin-top: 8px;">
                 </div>
-                <div class="field-group"><label for="prodCodigo">Código</label><input type="text" id="prodCodigo" required maxlength="50"></div>
-                
+                <div class="field-group"><label for="prodCodigo">Código</label><input type="text" id="prodCodigo"
+                        required maxlength="50"></div>
+
                 <!-- Fila 3: Cantidades - Abarca las 2 columnas -->
-                <div id="prodCantidadContainer" style="grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end;">
+                <div id="prodCantidadContainer"
+                    style="grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end;">
                     <div id="cantidadActualGroup" class="field-group" style="display: none; margin: 0;">
                         <label for="prodCantidadActual">Cantidad Actual</label>
-                        <input type="number" id="prodCantidadActual" required value="0" min="0">
+                        <input type="number" id="prodCantidadActual" value="0" min="0">
                     </div>
                     <div id="cantidadIngresarGroup" class="field-group" style="margin: 0;">
                         <label id="labelCantidadIngresar" for="prodCantidad">Cantidad a Ingresar</label>
@@ -224,38 +247,66 @@
                     </div>
                 </div>
 
-                <!-- Fila 4 -->
-                <div class="field-group"><label for="prodUbicacion">Ubicación</label><input type="text" id="prodUbicacion" maxlength="10" placeholder="Ej: A01"></div>
-                
-                <!-- Campos de precio manuales, ahora parte de la cuadrícula principal -->
-                <div class="field-group manual-price-field"><label for="prodCostoDolaresBcv">Precio Costo $ BCV</label><input type="number" step="0.01" id="prodCostoDolaresBcv" placeholder="Ej: 8.00"></div>
-                <div class="field-group manual-price-field"><label for="prodVentaDolaresBcv">Precio Venta $ BCV</label><input type="number" step="0.01" id="prodVentaDolaresBcv" placeholder="Ej: 10.50"></div>
-                <div class="field-group manual-price-field"><label for="prodCostoDolaresEfectivo">Costo $ Efectivo</label><input type="number" step="0.01" id="prodCostoDolaresEfectivo" placeholder="Ej: 9.50"></div>
-                <div class="field-group manual-price-field"><label for="prodUsdt">Venta $ Efectivo</label><input type="number" step="0.01" id="prodUsdt" placeholder="Ej: 11.20"></div>
+                <!-- Fila 4: Ubicación -->
+                <div class="field-group" style="grid-column: span 2;"><label for="prodUbicacion">Ubicación</label><input
+                        type="text" id="prodUbicacion" maxlength="10"></div>
+
+                <!-- Toggle de Modos de Precios -->
+                <div
+                    style="grid-column: span 2; border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 2px;">
+                    <label
+                        style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 0.85rem; color: var(--text-primary);">Modo
+                        de Fijación de Precios</label>
+                    <div class="modal-toggle-buttons">
+                        <button type="button" id="btnModoManual" class="toggle-btn active">Registro Normal
+                            (Manual)</button>
+                        <button type="button" id="btnModoCalculadora" class="toggle-btn">Hacer Cálculo de % (Proveedor /
+                            Ganancia)</button>
+                    </div>
+                </div>
+
+                <!-- Campos de precio manuales -->
+                <div class="field-group manual-price-field"><label for="prodCostoDolaresBcv">Precio Costo $
+                        BCV</label><input type="number" step="any" id="prodCostoDolaresBcv"></div>
+                <div class="field-group manual-price-field"><label for="prodVentaDolaresBcv">Precio Venta $
+                        BCV</label><input type="number" step="any" id="prodVentaDolaresBcv"></div>
+                <div class="field-group manual-price-field"><label for="prodCostoDolaresEfectivo">Costo $
+                        Efectivo</label><input type="number" step="any" id="prodCostoDolaresEfectivo"></div>
+                <div class="field-group manual-price-field"><label for="prodUsdt">Venta $ Efectivo</label><input
+                        type="number" step="any" id="prodUsdt"></div>
 
                 <!-- Contenedor para la calculadora de precios -->
                 <div id="calculator-container" style="grid-column: span 2; display: none;">
                     <div id="calculator-inputs" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
-                        <div class="field-group" style="margin:0;"><label for="calcCostoUsdt">Precio $ Proveedor</label><input type="number" step="0.01" id="calcCostoUsdt" placeholder="Ej: 8.50"></div>
-                        <div class="field-group" style="margin:0;"><label for="calcDescuento">Descuento (%)</label><input type="number" step="0.01" id="calcDescuento" placeholder="Ej: 10"></div>
-                        <div class="field-group" style="margin:0;"><label for="calcGanancia">Ganancia (%)</label><input type="number" step="0.01" id="calcGanancia" placeholder="Ej: 20"></div>
+                        <div class="field-group" style="margin:0;"><label for="calcCostoUsdt">Precio $
+                                Proveedor</label><input type="number" step="any" min="0" id="calcCostoUsdt"></div>
+                        <div class="field-group" style="margin:0;"><label for="calcDescuento">Descuento
+                                (%)</label><input type="number" step="any" min="0" id="calcDescuento"></div>
+                        <div class="field-group" style="margin:0;"><label for="calcGanancia">Ganancia (%)</label><input
+                                type="number" step="any" min="0" id="calcGanancia"></div>
                     </div>
-                    <div style="text-align: center; margin: 15px 0;">
-                        <button type="button" id="btnCalcularPrecios" class="action-btn btn-blue">Calcular Precios</button>
+                    <div style="text-align: center; margin: 12px 0 10px 0;">
+                        <button type="button" id="btnCalcularPrecios" class="action-btn btn-blue"
+                            style="padding: 6px 16px; font-size: 0.85rem;">Calcular Precios</button>
                     </div>
-                    <div id="calculator-results" style="display: none; background: var(--bg-input); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
-                        <h4 style="margin-top: 0; margin-bottom: 10px; color: var(--text-muted); font-size: 0.8rem; text-align: center;">RESULTADOS DEL CÁLCULO</h4>
-                        <p style="font-size: 0.9rem; margin-bottom: 5px;"><strong>Costo $ Efectivo:</strong> <span id="resCostoEfectivo" style="font-weight: bold; color: var(--btn-orange);">$ 0.00</span></p>
-                        <p style="font-size: 0.9rem; margin-bottom: 5px;"><strong>Venta $ Efectivo:</strong> <span id="resVentaUsdt" style="font-weight: bold; color: var(--btn-orange);">$ 0.00</span></p>
-                        <p style="font-size: 0.9rem; margin-bottom: 5px;"><strong>Costo $ BCV:</strong> <span id="resCostoBcv" style="font-weight: bold;">$ 0.00</span></p>
-                        <p style="font-size: 0.9rem; margin-bottom: 5px;"><strong>Venta $ BCV:</strong> <span id="resVentaBcv" style="font-weight: bold; color: var(--btn-green);">$ 0.00</span></p>
-                    </div>
-                </div>
-
-                <div style="grid-column: span 2; border-top: 1px solid var(--border-color); padding-top: 15px; margin-top: 5px;">
-                    <div class="modal-toggle-buttons">
-                        <button type="button" id="btnModoManual" class="toggle-btn active">registro normal</button>
-                        <button type="button" id="btnModoCalculadora" class="toggle-btn">hacer calculo de %</button>
+                    <div id="calculator-results"
+                        style="display: none; background: var(--bg-input); padding: 12px; border-radius: 6px; border: 1px solid var(--border-color);">
+                        <h4
+                            style="margin-top: 0; margin-bottom: 8px; color: var(--text-muted); font-size: 0.8rem; text-align: center; letter-spacing: 0.5px;">
+                            RESULTADOS CALCULADOS</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <p style="font-size: 0.9rem; margin: 0;"><strong>Costo $ Efectivo:</strong> <span
+                                    id="resCostoEfectivo" style="font-weight: bold; color: var(--btn-orange);">$
+                                    0.00</span></p>
+                            <p style="font-size: 0.9rem; margin: 0;"><strong>Venta $ Efectivo:</strong> <span
+                                    id="resVentaUsdt" style="font-weight: bold; color: var(--btn-orange);">$ 0.00</span>
+                            </p>
+                            <p style="font-size: 0.9rem; margin: 0;"><strong>Costo $ BCV:</strong> <span
+                                    id="resCostoBcv" style="font-weight: bold;">$ 0.00</span></p>
+                            <p style="font-size: 0.9rem; margin: 0;"><strong>Venta $ BCV:</strong> <span
+                                    id="resVentaBcv" style="font-weight: bold; color: var(--btn-green);">$ 0.00</span>
+                            </p>
+                        </div>
                     </div>
                 </div>
 
@@ -269,14 +320,21 @@
 
     <div class="modal-overlay" id="modalAdicional">
         <div class="modal" style="max-width: 500px;">
-            <button type="button" class="action-btn btn-del" data-modal-close style="position: absolute; top: 20px; right: 20px; padding: 6px 14px; font-size: 0.85rem;">cerrar</button>
+            <button type="button" class="action-btn btn-del" data-modal-close
+                style="position: absolute; top: 20px; right: 20px; padding: 6px 14px; font-size: 0.85rem;">cerrar</button>
             <h3>Agregar Producto Adicional</h3>
-            <form class="modal-form" id="formAdicional" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                <div class="field-group"><label for="adicCodigo">Código (Opcional)</label><input type="text" id="adicCodigo" placeholder="Ej. ADIC-01"></div>
-                <div class="field-group"><label for="adicNombre">Nombre del Producto</label><input type="text" id="adicNombre" placeholder="Ej. Servicio Extra" required></div>
-                <div class="field-group"><label for="adicPrecioVenta">Precio de Venta ($)</label><input type="number" step="0.01" id="adicPrecioVenta" value="0.00" required></div>
-                <div class="field-group"><label for="adicCantidad">Cantidad</label><input type="number" id="adicCantidad" value="1" min="1" required></div>
-                <p style="grid-column: span 2; font-size: 0.8rem; color: var(--text-muted); margin: -5px 0 5px 0;">Este precio se usará para ambas tasas (BCV y USDT).</p>
+            <form class="modal-form" id="formAdicional"
+                style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="field-group"><label for="adicCodigo">Código (Opcional)</label><input type="text"
+                        id="adicCodigo"></div>
+                <div class="field-group"><label for="adicNombre">Nombre del Producto</label><input type="text"
+                        id="adicNombre" required></div>
+                <div class="field-group"><label for="adicPrecioVenta">Precio de Venta ($)</label><input type="number"
+                        step="0.01" id="adicPrecioVenta" value="0.00" required></div>
+                <div class="field-group"><label for="adicCantidad">Cantidad</label><input type="number"
+                        id="adicCantidad" value="1" min="1" required></div>
+                <p style="grid-column: span 2; font-size: 0.8rem; color: var(--text-muted); margin: -5px 0 5px 0;">Este
+                    precio se usará para ambas tasas (BCV y USDT).</p>
                 <div class="modal-buttons" style="grid-column: span 2; margin-top: 10px;">
                     <button type="submit" class="action-btn btn-green">Agregar a la Caja</button>
                     <button type="button" class="action-btn btn-del" data-modal-close>Cancelar</button>
@@ -289,17 +347,20 @@
         <div class="modal-container" style="max-width: 400px;">
             <div class="modal-header">
                 <h3>Contraseña Requerida</h3>
-                <button type="button" data-modal-close class="action-btn btn-del" style="position: absolute; top: 15px; right: 15px; padding: 4px 10px; font-size: 0.8rem;">&times;</button>
+                <button type="button" data-modal-close class="action-btn btn-del"
+                    style="position: absolute; top: 15px; right: 15px; padding: 4px 10px; font-size: 0.8rem;">&times;</button>
             </div>
             <form id="formPasswordVenta" class="modal-body">
-                <p style="font-size: 0.9rem; color: var(--text-muted); text-align: center; margin-bottom: 10px;">Para editar esta venta, por favor ingrese la contraseña de autorización.</p>
+                <p style="font-size: 0.9rem; color: var(--text-muted); text-align: center; margin-bottom: 10px;">Para
+                    editar esta venta, por favor ingrese la contraseña de autorización.</p>
                 <input type="hidden" id="ventaIdParaEditar">
                 <div class="field-group">
                     <label for="adminPassword">Contraseña</label>
                     <input type="password" id="adminPassword" required autocomplete="off">
                 </div>
                 <div class="modal-footer" style="margin-top: 20px;">
-                    <button type="button" data-modal-close class="action-btn" style="background: #475569;">Cancelar</button>
+                    <button type="button" data-modal-close class="action-btn"
+                        style="background: #475569;">Cancelar</button>
                     <button type="submit" class="action-btn btn-blue">Verificar y Editar</button>
                 </div>
             </form>
@@ -307,53 +368,61 @@
     </div>
 
     <div class="modal-overlay" id="modalEditarVenta">
-        <div class="modal-container">
+        <div class="modal-container" style="max-width: 580px;">
             <div class="modal-header">
-                <h3>Editar Venta <span id="editVentaIdDisplay" style="color: var(--btn-yellow); font-family: monospace;"></span></h3>
-                <button type="button" data-modal-close style="background:none; border:none; color:var(--text-muted); font-size:1.2rem; cursor:pointer;">&times;</button>
+                <h3>Editar Venta <span id="editVentaIdDisplay"
+                        style="color: var(--btn-yellow); font-family: monospace;"></span></h3>
+                <button type="button" data-modal-close
+                    style="background:none; border:none; color:var(--text-muted); font-size:1.2rem; cursor:pointer;">&times;</button>
             </div>
             <form id="formEditarVenta" class="modal-body">
                 <input type="hidden" id="editVentaId">
                 <input type="hidden" id="editVentaTotalUsd">
 
-                <p style="font-size: 0.85rem; color: var(--text-muted); background-color: var(--bg-input); padding: 8px; border-radius: 6px; border-left: 3px solid var(--btn-orange);">
-                    <strong>Atención:</strong> Puedes editar los datos del cliente y los métodos de pago. Los productos y el total de la venta no se pueden modificar.
+                <p
+                    style="font-size: 0.85rem; color: var(--text-muted); background-color: var(--bg-input); padding: 8px; border-radius: 6px; border-left: 3px solid var(--btn-orange);">
+                    <strong>Atención:</strong> Puedes editar los datos del cliente y los métodos de pago. Los productos
+                    y el total de la venta no se pueden modificar.
                 </p>
 
                 <!-- Datos del Cliente -->
-                <div class="field-group">
-                    <label for="editCliNombre">Nombre del Cliente *</label>
-                    <input type="text" id="editCliNombre" required placeholder="Ej. Juan Pérez" autocomplete="off">
-                </div>
-                <div class="field-group">
-                    <label for="editCliCedula">Cédula o RIF (Máx. 10 dígitos) *</label>
-                    <div style="display: flex; gap: 6px; align-items: center;">
-                        <select id="editCliTipoCedula" style="width: 80px; flex-shrink: 0;" required>
-                            <option value="V">V</option>
-                            <option value="E">E</option>
-                            <option value="J">J</option>
-                            <option value="G">G</option>
-                        </select>
-                        <input type="text" id="editCliCedula" maxlength="10" inputmode="numeric" pattern="[0-9]{1,10}" required placeholder="Ej. 12345678" autocomplete="off" style="flex: 1;">
+                <div class="form-grid-2col">
+                    <div class="field-group">
+                        <label for="editCliNombre">Nombre del Cliente *</label>
+                        <input type="text" id="editCliNombre" required autocomplete="off">
                     </div>
-                </div>
-                <div class="field-group">
-                    <label for="editCliTelefono">Teléfono (opcional)</label>
-                    <div style="display: flex; gap: 6px; align-items: center;">
-                        <select id="editCliCodTelefono" style="width: 90px; flex-shrink: 0;">
-                            <option value="0414">0414</option>
-                            <option value="0424">0424</option>
-                            <option value="0426">0426</option>
-                            <option value="0416">0416</option>
-                            <option value="0422">0422</option>
-                            <option value="0412">0412</option>
-                        </select>
-                        <input type="text" id="editCliTelefono" maxlength="7" inputmode="numeric" pattern="[0-9]*" placeholder="Ej. 1234567" autocomplete="off" style="flex: 1;">
+                    <div class="field-group">
+                        <label for="editCliCedula">Cédula o RIF (Máx. 10 dígitos) *</label>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <select id="editCliTipoCedula" style="width: 75px; flex-shrink: 0;" required>
+                                <option value="V">V</option>
+                                <option value="E">E</option>
+                                <option value="J">J</option>
+                                <option value="G">G</option>
+                            </select>
+                            <input type="text" id="editCliCedula" maxlength="10" inputmode="numeric" pattern="[0-9]{1,10}"
+                                required autocomplete="off" style="flex: 1; min-width: 0;">
+                        </div>
                     </div>
-                </div>
-                <div class="field-group">
-                    <label for="editCliDireccion">Dirección (opcional)</label>
-                    <textarea id="editCliDireccion" rows="2" placeholder="Dirección del cliente (opcional)" style="resize: none;"></textarea>
+                    <div class="field-group">
+                        <label for="editCliTelefono">Teléfono (opcional)</label>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <select id="editCliCodTelefono" style="width: 85px; flex-shrink: 0;">
+                                <option value="0414">0414</option>
+                                <option value="0424">0424</option>
+                                <option value="0426">0426</option>
+                                <option value="0416">0416</option>
+                                <option value="0422">0422</option>
+                                <option value="0412">0412</option>
+                            </select>
+                            <input type="text" id="editCliTelefono" maxlength="7" inputmode="numeric" pattern="[0-9]*"
+                                autocomplete="off" style="flex: 1; min-width: 0;">
+                        </div>
+                    </div>
+                    <div class="field-group">
+                        <label for="editCliDireccion">Dirección (opcional)</label>
+                        <input type="text" id="editCliDireccion" autocomplete="off">
+                    </div>
                 </div>
 
                 <!-- Métodos de Pago Editables -->
@@ -378,11 +447,13 @@
                         </div>
                         <div class="modal-resumen-row">
                             <span style="color: var(--btn-green);">Total Pagado ($):</span>
-                            <span id="editModalTotalPagado" style="font-weight: bold; color: var(--btn-green);">$ 0.00</span>
+                            <span id="editModalTotalPagado" style="font-weight: bold; color: var(--btn-green);">$
+                                0.00</span>
                         </div>
                         <div class="modal-resumen-row">
                             <span style="color: var(--btn-green);">Total Pagado (Bs):</span>
-                            <span id="editModalTotalPagadoBs" style="font-weight: bold; color: var(--btn-green);">Bs 0.00</span>
+                            <span id="editModalTotalPagadoBs" style="font-weight: bold; color: var(--btn-green);">Bs
+                                0.00</span>
                         </div>
                         <div class="modal-resumen-row">
                             <span id="editFaltanteLabel" style="color: var(--btn-red);">Faltante ($):</span>
@@ -390,14 +461,17 @@
                         </div>
                         <div class="modal-resumen-row">
                             <span style="color: var(--btn-red);">Faltante (Bs):</span>
-                            <span id="editModalFaltanteBs" style="font-weight: bold; color: var(--btn-red);">Bs 0.00</span>
+                            <span id="editModalFaltanteBs" style="font-weight: bold; color: var(--btn-red);">Bs
+                                0.00</span>
                         </div>
                     </div>
                 </div>
 
                 <div class="modal-footer">
-                    <button type="button" data-modal-close class="action-btn" style="background: #475569;">Cancelar</button>
-                    <button type="submit" id="btnConfirmarEdicionVenta" class="action-btn btn-green">Guardar Cambios</button>
+                    <button type="button" data-modal-close class="action-btn"
+                        style="background: #475569;">Cancelar</button>
+                    <button type="submit" id="btnConfirmarEdicionVenta" class="action-btn btn-green">Guardar
+                        Cambios</button>
                 </div>
             </form>
         </div>
@@ -407,8 +481,10 @@
     <div class="modal-overlay" id="modalAbonoVenta">
         <div class="modal-container">
             <div class="modal-header">
-                <h3>Registrar Abono a Venta <span id="abonoVentaIdDisplay" style="color: var(--btn-yellow); font-family: monospace;"></span></h3>
-                <button type="button" data-modal-close style="background:none; border:none; color:var(--text-muted); font-size:1.2rem; cursor:pointer;">&times;</button>
+                <h3>Registrar Abono a Venta <span id="abonoVentaIdDisplay"
+                        style="color: var(--btn-yellow); font-family: monospace;"></span></h3>
+                <button type="button" data-modal-close
+                    style="background:none; border:none; color:var(--text-muted); font-size:1.2rem; cursor:pointer;">&times;</button>
             </div>
             <form id="formAbonoVenta" class="modal-body">
                 <input type="hidden" id="abonoVentaId">
@@ -427,11 +503,13 @@
                         </div>
                         <div class="modal-resumen-row">
                             <span style="color: var(--btn-green);">Total Ya Abonado ($):</span>
-                            <span id="abonoTotalPagado" style="font-weight: bold; color: var(--btn-green);">$ 0.00</span>
+                            <span id="abonoTotalPagado" style="font-weight: bold; color: var(--btn-green);">$
+                                0.00</span>
                         </div>
                         <div class="modal-resumen-row">
                             <span style="color: var(--btn-green);">Total Ya Abonado (Bs):</span>
-                            <span id="abonoTotalPagadoBs" style="font-weight: bold; color: var(--btn-green);">Bs 0.00</span>
+                            <span id="abonoTotalPagadoBs" style="font-weight: bold; color: var(--btn-green);">Bs
+                                0.00</span>
                         </div>
                         <div class="modal-resumen-row" id="abonoFaltanteRow">
                             <span id="abonoFaltanteLabel" style="color: var(--btn-red);">Faltante por Pagar ($):</span>
@@ -456,19 +534,21 @@
                 <div class="field-group">
                     <label>Resumen del Nuevo Abono</label>
                     <div class="modal-resumen-pago" style="background: var(--bg-main);">
-                         <div class="modal-resumen-row">
+                        <div class="modal-resumen-row">
                             <span style="color: var(--btn-blue);">Total del Abono Actual ($):</span>
                             <span id="abonoNuevoTotal" style="font-weight: bold; color: var(--btn-blue);">$ 0.00</span>
                         </div>
-                         <div class="modal-resumen-row">
+                        <div class="modal-resumen-row">
                             <span style="color: var(--btn-blue);">Total del Abono Actual (Bs):</span>
-                            <span id="abonoNuevoTotalBs" style="font-weight: bold; color: var(--btn-blue);">Bs 0.00</span>
+                            <span id="abonoNuevoTotalBs" style="font-weight: bold; color: var(--btn-blue);">Bs
+                                0.00</span>
                         </div>
                     </div>
                 </div>
 
                 <div class="modal-footer">
-                    <button type="button" data-modal-close class="action-btn" style="background: #475569;">Cancelar</button>
+                    <button type="button" data-modal-close class="action-btn"
+                        style="background: #475569;">Cancelar</button>
                     <button type="submit" id="btnConfirmarAbono" class="action-btn btn-green">Confirmar Abono</button>
                 </div>
             </form>
@@ -479,15 +559,19 @@
     <div class="modal-overlay" id="modalVentaDetalles">
         <div class="modal-container" style="max-width: 450px;">
             <div class="modal-header">
-                <h3>Detalles de Venta <span id="detallesVentaIdDisplay" style="color: var(--btn-yellow); font-family: monospace;"></span></h3>
-                <button type="button" data-modal-close style="background:none; border:none; color:var(--text-muted); font-size:1.2rem; cursor:pointer;">&times;</button>
+                <h3>Detalles de Venta <span id="detallesVentaIdDisplay"
+                        style="color: var(--btn-yellow); font-family: monospace;"></span></h3>
+                <button type="button" data-modal-close
+                    style="background:none; border:none; color:var(--text-muted); font-size:1.2rem; cursor:pointer;">&times;</button>
             </div>
             <div class="modal-body">
-                <div id="detallesVentaProductos" class="product-card-value" style="text-align: left; background-color: var(--bg-main); padding: 15px;">
+                <div id="detallesVentaProductos" class="product-card-value"
+                    style="text-align: left; background-color: var(--bg-main); padding: 15px;">
                     <!-- Los detalles de los productos se cargarán aquí -->
                 </div>
                 <div class="modal-footer">
-                    <button type="button" data-modal-close class="action-btn" style="background: #475569;">Cerrar</button>
+                    <button type="button" data-modal-close class="action-btn"
+                        style="background: #475569;">Cerrar</button>
                 </div>
             </div>
         </div>
@@ -497,4 +581,5 @@
 
     <script type="module" src="app.js" defer></script>
 </body>
+
 </html>

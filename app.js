@@ -80,17 +80,6 @@ const buscarClientePorCedula = async () => {
 
     const cedulaCompleta = `${tipoCedula}-${numeroCedula}`;
 
-    // Feedback visual para el usuario mientras se realiza la búsqueda
-    const originalPlaceholders = {
-        nombre: nombreInput.placeholder,
-        telefono: telefonoInput.placeholder,
-        direccion: direccionInput.placeholder
-    };
-
-    nombreInput.placeholder = 'Buscando cliente...';
-    telefonoInput.placeholder = '...';
-    direccionInput.placeholder = '...';
-
     try {
         const { data: venta, error } = await _supabase
             .from('ventas')
@@ -124,11 +113,6 @@ const buscarClientePorCedula = async () => {
     } catch (err) {
         console.error('Error al buscar cliente por cédula:', err);
         showToast('Ocurrió un error al intentar buscar el cliente.', 'error');
-    } finally {
-        // Restaurar los placeholders originales en todos los casos
-        if (nombreInput) nombreInput.placeholder = originalPlaceholders.nombre;
-        if (telefonoInput) telefonoInput.placeholder = originalPlaceholders.telefono;
-        if (direccionInput) direccionInput.placeholder = originalPlaceholders.direccion;
     }
 };
 
@@ -488,28 +472,86 @@ function renderProducts(productsToRender) {
     const stockTotEl = document.getElementById('stockTotal');
     if (stockTotEl) stockTotEl.textContent = formatInteger(stockTotal);
 }
+ 
+function parseSafeFloat(val, defaultVal = 0) {
+    if (val === null || val === undefined) return defaultVal;
+    if (typeof val === 'number') return isNaN(val) ? defaultVal : val;
+    const str = String(val).trim().replace(/%/g, '').replace(',', '.');
+    const num = parseFloat(str);
+    return isNaN(num) ? defaultVal : num;
+}
 
 function calcularPreciosPorcentaje(precioProv, porcDesc, porcGanancia, rateOficial = oficialRate, rateParalelo = paraleloRate) {
-    const costoEfectivo = precioProv * (1 - (porcDesc / 100));
-    const ventaEfectivo = costoEfectivo * (1 + (porcGanancia / 100));
+    const prov = parseSafeFloat(precioProv, 0);
+    const desc = parseSafeFloat(porcDesc, 0);
+    const gan = parseSafeFloat(porcGanancia, 0);
+
+    const costoEfectivo = prov * (1 - (desc / 100));
+    const ventaEfectivo = costoEfectivo * (1 + (gan / 100));
     let costoUsdBcv = costoEfectivo;
     let ventaUsdBcv = ventaEfectivo;
 
-    const pRate = (rateParalelo > 0) ? rateParalelo : (rateOficial > 0 ? rateOficial : 1);
-    const oRate = (rateOficial > 0) ? rateOficial : (rateParalelo > 0 ? rateParalelo : 1);
+    const effOficial = (rateOficial > 0) ? rateOficial : ((typeof tasaSettings !== 'undefined' && tasaSettings?.oficial?.value > 0) ? tasaSettings.oficial.value : 0);
+    const effParalelo = (rateParalelo > 0) ? rateParalelo : ((typeof tasaSettings !== 'undefined' && tasaSettings?.paralelo?.value > 0) ? tasaSettings.paralelo.value : 0);
+
+    const pRate = (effParalelo > 0) ? effParalelo : (effOficial > 0 ? effOficial : 1);
+    const oRate = (effOficial > 0) ? effOficial : (effParalelo > 0 ? effParalelo : 1);
 
     if (oRate > 0 && pRate > 0) {
         const costoBsBcv = costoEfectivo * pRate;
         costoUsdBcv = costoBsBcv / oRate;
-        ventaUsdBcv = costoUsdBcv * (1 + (porcGanancia / 100));
+        ventaUsdBcv = costoUsdBcv * (1 + (gan / 100));
     }
 
     return {
-        costoEfectivo,
-        ventaEfectivo,
-        costoUsdBcv,
-        ventaUsdBcv
+        costoEfectivo: Math.round(costoEfectivo * 100) / 100,
+        ventaEfectivo: Math.round(ventaEfectivo * 100) / 100,
+        costoUsdBcv: Math.round(costoUsdBcv * 100) / 100,
+        ventaUsdBcv: Math.round(ventaUsdBcv * 100) / 100
     };
+}
+
+function actualizarResultadosCalculadora() {
+    let precioProv = parseSafeFloat(document.getElementById('calcCostoUsdt')?.value, 0);
+    if (precioProv <= 0) {
+        precioProv = parseSafeFloat(document.getElementById('prodCostoDolaresEfectivo')?.value, 0) ||
+            parseSafeFloat(document.getElementById('prodCostoDolaresBcv')?.value, 0);
+        if (precioProv > 0) {
+            const inputCosto = document.getElementById('calcCostoUsdt');
+            if (inputCosto) inputCosto.value = precioProv;
+        }
+    }
+
+    const porcProv = parseSafeFloat(document.getElementById('calcDescuento')?.value, 0);
+    const porcVenta = parseSafeFloat(document.getElementById('calcGanancia')?.value, 0);
+
+    if (precioProv > 0) {
+        const calculados = calcularPreciosPorcentaje(precioProv, porcProv, porcVenta);
+        const resCostoEf = document.getElementById('resCostoEfectivo');
+        const resCostoBcv = document.getElementById('resCostoBcv');
+        const resVentaBcv = document.getElementById('resVentaBcv');
+        const resVentaEf = document.getElementById('resVentaUsdt');
+        const calcResults = document.getElementById('calculator-results');
+
+        if (resCostoEf) resCostoEf.textContent = `$ ${formatCurrency(calculados.costoEfectivo)}`;
+        if (resCostoBcv) resCostoBcv.textContent = `$ ${formatCurrency(calculados.costoUsdBcv)}`;
+        if (resVentaBcv) resVentaBcv.textContent = `$ ${formatCurrency(calculados.ventaUsdBcv)}`;
+        if (resVentaEf) resVentaEf.textContent = `$ ${formatCurrency(calculados.ventaEfectivo)}`;
+        if (calcResults) calcResults.style.display = 'block';
+
+        const prodCostoEf = document.getElementById('prodCostoDolaresEfectivo');
+        const prodVentaEf = document.getElementById('prodUsdt');
+        const prodCostoBcv = document.getElementById('prodCostoDolaresBcv');
+        const prodVentaBcv = document.getElementById('prodVentaDolaresBcv');
+
+        if (prodCostoEf) prodCostoEf.value = calculados.costoEfectivo;
+        if (prodVentaEf) prodVentaEf.value = calculados.ventaEfectivo;
+        if (prodCostoBcv) prodCostoBcv.value = calculados.costoUsdBcv;
+        if (prodVentaBcv) prodVentaBcv.value = calculados.ventaUsdBcv;
+
+        return calculados;
+    }
+    return null;
 }
 
 async function handleEditarProducto() {
@@ -541,7 +583,7 @@ async function handleEditarProducto() {
     cantidadContainer.style.gridTemplateColumns = '1fr 1fr'; // Mostrar dos columnas
 
     document.getElementById('cantidadActualGroup').style.display = 'block';
-    document.getElementById('prodCantidadActual').value = productoSeleccionado.cantidad;
+    document.getElementById('prodCantidadActual').value = productoSeleccionado.cantidad ?? 0;
 
     document.getElementById('cantidadIngresarGroup').style.display = 'block';
     document.getElementById('labelCantidadIngresar').textContent = 'Cantidad que Ingresa';
@@ -569,24 +611,9 @@ async function handleEditarProducto() {
     const tieneDatosCalc = (productoSeleccionado.calc_costo_$_efectivo != null || productoSeleccionado.calc_descuento != null || productoSeleccionado.calc_ganancia != null);
     const isCalcMode = (modo === 'calculator' || modo === 'calculadora' || tieneDatosCalc);
 
-    if (isCalcMode && tieneDatosCalc) {
+    if (isCalcMode) {
         setProductModalMode('calculator');
-        const precioProv = parseFloat(document.getElementById('calcCostoUsdt').value) || 0;
-        const porcProv = parseFloat(document.getElementById('calcDescuento').value) || 0;
-        const porcVenta = parseFloat(document.getElementById('calcGanancia').value) || 0;
-        if (precioProv > 0) {
-            const calculados = calcularPreciosPorcentaje(precioProv, porcProv, porcVenta);
-            const resCostoEf = document.getElementById('resCostoEfectivo');
-            const resCostoBcv = document.getElementById('resCostoBcv');
-            const resVentaBcv = document.getElementById('resVentaBcv');
-            const resVentaEf = document.getElementById('resVentaUsdt');
-            const calcResults = document.getElementById('calculator-results');
-            if (resCostoEf) resCostoEf.textContent = `$ ${formatCurrency(calculados.costoEfectivo)}`;
-            if (resCostoBcv) resCostoBcv.textContent = `$ ${formatCurrency(calculados.costoUsdBcv)}`;
-            if (resVentaBcv) resVentaBcv.textContent = `$ ${formatCurrency(calculados.ventaUsdBcv)}`;
-            if (resVentaEf) resVentaEf.textContent = `$ ${formatCurrency(calculados.ventaEfectivo)}`;
-            if (calcResults) calcResults.style.display = 'block';
-        }
+        actualizarResultadosCalculadora();
     } else {
         setProductModalMode('manual');
     }
@@ -1429,7 +1456,6 @@ async function handleAbrirModalAbono(ventaId) {
         const id = `abono_${metodo.toLowerCase().replace(/ /g, '_').replace('ó', 'o')}`;
         const isBsMethod = metodosEnBolivares.includes(metodo);
         const currencyLabel = isBsMethod ? 'Bs' : '$';
-        const placeholderText = `Monto en ${currencyLabel}`;
 
         return `
             <div class="payment-method-row">
@@ -1438,7 +1464,7 @@ async function handleAbrirModalAbono(ventaId) {
                     <label for="check_${id}">${metodo} (${currencyLabel})</label>
                 </div>
                 <div class="payment-method-input" id="input_container_${id}" style="display: none;">
-                    <input type="number" class="abono-payment-amount-input" step="0.01" placeholder="${placeholderText}" id="amount_${id}" data-method-name="${metodo}" data-currency="${isBsMethod ? 'BS' : 'USD'}">
+                    <input type="number" class="abono-payment-amount-input" step="0.01" id="amount_${id}" data-method-name="${metodo}" data-currency="${isBsMethod ? 'BS' : 'USD'}">
                     <button type="button" class="action-btn btn-blue btn-fill-remaining" data-target-id="${id}">FULL</button>
                 </div>
             </div>
@@ -1783,7 +1809,7 @@ async function handleAbrirModalEditarVenta(venta) {
                     <label for="check_${id}">${metodo} (${currencyLabel})</label>
                 </div>
                 <div class="payment-method-input" id="input_container_${id}" style="display: none;">
-                    <input type="number" class="edit-payment-amount-input" step="0.01" placeholder="Monto en ${currencyLabel}" id="amount_${id}" data-method-name="${metodo}" data-currency="${isBsMethod ? 'BS' : 'USD'}">
+                    <input type="number" class="edit-payment-amount-input" step="0.01" id="amount_${id}" data-method-name="${metodo}" data-currency="${isBsMethod ? 'BS' : 'USD'}">
                     <button type="button" class="action-btn btn-blue btn-fill-remaining" data-target-id="${id}">FULL</button>
                 </div>
             </div>
@@ -2449,7 +2475,7 @@ function renderizarVentaParaDevolucion(venta, devolucionesMap) {
                     </div>
                     <div class="field-group" style="flex-grow: 1;">
                         <label for="motivo-${uniqueKey}">Motivo de la devolución</label>
-                        <input type="text" class="motivo-devolucion" id="motivo-${uniqueKey}" placeholder="Ej: Producto defectuoso">
+                        <input type="text" class="motivo-devolucion" id="motivo-${uniqueKey}">
                     </div>
                 </div>
             </div>
@@ -2843,6 +2869,12 @@ function setProductModalMode(mode) {
         if (calcContainer) calcContainer.style.display = 'block';
         if (btnManual) btnManual.classList.remove('active');
         if (btnCalc) btnCalc.classList.add('active');
+
+        // Recalcular inmediatamente si ya hay valores
+        const precioProv = parseSafeFloat(document.getElementById('calcCostoUsdt')?.value, 0);
+        if (precioProv > 0) {
+            actualizarResultadosCalculadora();
+        }
     } else { // default to manual
         if (form) form.dataset.mode = 'manual';
         manualPriceFields.forEach(el => el.style.display = 'flex');
@@ -3407,71 +3439,21 @@ document.addEventListener('click', (e) => {
     }
 
     // Toggle para modos de carga de producto
-    if (e.target.matches('#btnModoManual')) {
+    if (e.target.closest('#btnModoManual')) {
         setProductModalMode('manual');
-    } else if (e.target.matches('#btnModoCalculadora')) {
+    } else if (e.target.closest('#btnModoCalculadora')) {
         setProductModalMode('calculator');
-        let precioProv = parseFloat(document.getElementById('calcCostoUsdt')?.value);
-        if (isNaN(precioProv) || precioProv <= 0) {
-            const costoActual = parseFloat(document.getElementById('prodCostoDolaresEfectivo')?.value) ||
-                parseFloat(document.getElementById('prodCostoDolaresBcv')?.value) || 0;
-            if (costoActual > 0) {
-                document.getElementById('calcCostoUsdt').value = costoActual;
-                precioProv = costoActual;
-            }
-        }
-        const porcProv = parseFloat(document.getElementById('calcDescuento')?.value) || 0;
-        const porcVenta = parseFloat(document.getElementById('calcGanancia')?.value) || 0;
-        if (precioProv > 0) {
-            const calculados = calcularPreciosPorcentaje(precioProv, porcProv, porcVenta);
-            const resCostoEf = document.getElementById('resCostoEfectivo');
-            const resCostoBcv = document.getElementById('resCostoBcv');
-            const resVentaBcv = document.getElementById('resVentaBcv');
-            const resVentaEf = document.getElementById('resVentaUsdt');
-            const calcResults = document.getElementById('calculator-results');
-            if (resCostoEf) resCostoEf.textContent = `$ ${formatCurrency(calculados.costoEfectivo)}`;
-            if (resCostoBcv) resCostoBcv.textContent = `$ ${formatCurrency(calculados.costoUsdBcv)}`;
-            if (resVentaBcv) resVentaBcv.textContent = `$ ${formatCurrency(calculados.ventaUsdBcv)}`;
-            if (resVentaEf) resVentaEf.textContent = `$ ${formatCurrency(calculados.ventaEfectivo)}`;
-            if (calcResults) calcResults.style.display = 'block';
-
-            document.getElementById('prodCostoDolaresEfectivo').value = calculados.costoEfectivo;
-            document.getElementById('prodUsdt').value = calculados.ventaEfectivo;
-            document.getElementById('prodCostoDolaresBcv').value = calculados.costoUsdBcv;
-            document.getElementById('prodVentaDolaresBcv').value = calculados.ventaUsdBcv;
-        }
+        actualizarResultadosCalculadora();
     }
 
     // Botón para calcular precios en el modal de nuevo producto
-    if (e.target.matches('#btnCalcularPrecios')) {
-        let precioProv = parseFloat(document.getElementById('calcCostoUsdt').value) || 0;
-        const porcProv = parseFloat(document.getElementById('calcDescuento').value) || 0;
-        const porcVenta = parseFloat(document.getElementById('calcGanancia').value) || 0;
-
-        if (precioProv <= 0) {
-            precioProv = parseFloat(document.getElementById('prodCostoDolaresEfectivo')?.value) ||
-                parseFloat(document.getElementById('prodCostoDolaresBcv')?.value) || 0;
-        }
-
-        if (precioProv <= 0) {
+    if (e.target.closest('#btnCalcularPrecios')) {
+        setProductModalMode('calculator');
+        const calculados = actualizarResultadosCalculadora();
+        if (!calculados) {
             showToast('Ingresa un precio de proveedor válido mayor a 0.', 'error');
             return;
         }
-
-        const calculados = calcularPreciosPorcentaje(precioProv, porcProv, porcVenta);
-
-        document.getElementById('resCostoEfectivo').textContent = `$ ${formatCurrency(calculados.costoEfectivo)}`;
-        document.getElementById('resCostoBcv').textContent = `$ ${formatCurrency(calculados.costoUsdBcv)}`;
-        document.getElementById('resVentaBcv').textContent = `$ ${formatCurrency(calculados.ventaUsdBcv)}`;
-        document.getElementById('resVentaUsdt').textContent = `$ ${formatCurrency(calculados.ventaEfectivo)}`;
-        document.getElementById('calculator-results').style.display = 'block';
-
-        // Poblar los campos de entrada manuales (ocultos) con los valores calculados
-        document.getElementById('prodCostoDolaresEfectivo').value = calculados.costoEfectivo;
-        document.getElementById('prodUsdt').value = calculados.ventaEfectivo;
-        document.getElementById('prodCostoDolaresBcv').value = calculados.costoUsdBcv;
-        document.getElementById('prodVentaDolaresBcv').value = calculados.ventaUsdBcv;
-
         showToast('Precios calculados y aplicados.', 'success');
     }
 });
@@ -3549,7 +3531,6 @@ async function handleAbrirModalVenta() {
             const isBsMethod = metodosEnBolivares.includes(metodo);
             const currencyLabel = isBsMethod ? 'Bs' : '$';
             const inputStep = isBsMethod ? '0.01' : '0.01'; // Ambos pueden tener decimales
-            const placeholderText = `Monto en ${currencyLabel}`;
 
             return `
                 <div class="payment-method-row">
@@ -3558,7 +3539,7 @@ async function handleAbrirModalVenta() {
                         <label for="check_${id}">${metodo} (${currencyLabel})</label>
                     </div>
                     <div class="payment-method-input" id="input_container_${id}" style="display: none;">
-                        <input type="number" class="payment-amount-input" step="${inputStep}" placeholder="${placeholderText}" id="amount_${id}" data-method-name="${metodo}" data-currency="${isBsMethod ? 'BS' : 'USD'}">
+                        <input type="number" class="payment-amount-input" step="${inputStep}" id="amount_${id}" data-method-name="${metodo}" data-currency="${isBsMethod ? 'BS' : 'USD'}">
                         <button type="button" class="action-btn btn-blue btn-fill-remaining" data-target-id="${id}">FULL</button>
                     </div>
                 </div>
@@ -4327,13 +4308,13 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="modal-form">
                 <div class="field-group">
                     <label for="marcaNombre">Nombre de la Marca</label>
-                    <input type="text" id="marcaNombre" placeholder="Ej: Total Repuestos"><input type="hidden" id="marcaId">
+                    <input type="text" id="marcaNombre"><input type="hidden" id="marcaId">
                 </div>
                 <div class="modal-buttons categoria-management" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: center;">
                     <button id="btnAgregarMarca" class="action-btn btn-green">Agregar</button>
                     <button id="btnEditarMarca" class="action-btn btn-edit">Editar</button>
                     <button id="btnEliminarMarca" class="action-btn btn-del">Eliminar</button>
-                    <input type="text" id="marcaBuscar" placeholder="Filtrar marcas..." style="grid-column: 1 / -1; width: 100%; padding-left: 12px;">
+                    <input type="text" id="marcaBuscar" placeholder="Buscar marca..." style="grid-column: 1 / -1; width: 100%; padding-left: 12px;">
                 </div>
                 <ul id="listaMarcas" class="cat-list"></ul>
             </div>
@@ -4406,26 +4387,33 @@ document.addEventListener('DOMContentLoaded', () => {
         formProducto.addEventListener('submit', async (e) => {
             e.preventDefault();
             const editCodigo = document.getElementById('prodEditCodigo').value;
-            const mode = formProducto.dataset.mode || 'manual';
+            let mode = formProducto.dataset.mode || 'manual';
 
             let precioCostoDolaresBcv, precioVentaDolaresBcv, ventaDolaresEfectivo, costoDolaresEfectivo;
             let calc_costo_$_efectivo = null, calc_descuento = null, calc_ganancia = null;
 
-            if (mode === 'calculator') {
-                let precioProv = parseFloat(document.getElementById('calcCostoUsdt')?.value);
-                const porcProv = parseFloat(document.getElementById('calcDescuento')?.value) || 0;
-                const porcVenta = parseFloat(document.getElementById('calcGanancia')?.value) || 0;
+            const valCalcCosto = parseSafeFloat(document.getElementById('calcCostoUsdt')?.value, 0);
+            const valCalcDesc = parseSafeFloat(document.getElementById('calcDescuento')?.value, 0);
+            const valCalcGan = parseSafeFloat(document.getElementById('calcGanancia')?.value, 0);
+
+            // Si está en modo calculadora o si el usuario llenó datos en la calculadora
+            if (mode === 'calculator' || (valCalcCosto > 0 && mode !== 'manual')) {
+                mode = 'calculator';
+                let precioProv = valCalcCosto;
 
                 // Si precioProv está vacío o es 0, buscar en los campos manuales como respaldo
-                if (isNaN(precioProv) || precioProv <= 0) {
-                    precioProv = parseFloat(document.getElementById('prodCostoDolaresEfectivo')?.value) ||
-                        parseFloat(document.getElementById('prodCostoDolaresBcv')?.value) || 0;
+                if (precioProv <= 0) {
+                    precioProv = parseSafeFloat(document.getElementById('prodCostoDolaresEfectivo')?.value, 0) ||
+                        parseSafeFloat(document.getElementById('prodCostoDolaresBcv')?.value, 0);
                 }
 
                 if (precioProv <= 0) {
                     showToast('Ingresa un precio de proveedor válido mayor a 0.', 'error');
                     return;
                 }
+
+                const porcProv = valCalcDesc;
+                const porcVenta = valCalcGan;
 
                 const calculados = calcularPreciosPorcentaje(precioProv, porcProv, porcVenta);
                 costoDolaresEfectivo = calculados.costoEfectivo;
@@ -4447,22 +4435,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (prodCostoBcv) prodCostoBcv.value = precioCostoDolaresBcv;
                 if (prodVentaBcv) prodVentaBcv.value = precioVentaDolaresBcv;
             } else { // manual
-                precioCostoDolaresBcv = parseFloat(document.getElementById('prodCostoDolaresBcv').value) || 0;
-                costoDolaresEfectivo = parseFloat(document.getElementById('prodCostoDolaresEfectivo').value) || 0;
-                precioVentaDolaresBcv = parseFloat(document.getElementById('prodVentaDolaresBcv').value) || 0;
-                ventaDolaresEfectivo = parseFloat(document.getElementById('prodUsdt').value) || 0;
+                precioCostoDolaresBcv = parseSafeFloat(document.getElementById('prodCostoDolaresBcv').value, 0);
+                costoDolaresEfectivo = parseSafeFloat(document.getElementById('prodCostoDolaresEfectivo').value, 0);
+                precioVentaDolaresBcv = parseSafeFloat(document.getElementById('prodVentaDolaresBcv').value, 0);
+                ventaDolaresEfectivo = parseSafeFloat(document.getElementById('prodUsdt').value, 0);
 
                 if (precioVentaDolaresBcv <= 0 || precioCostoDolaresBcv < 0 || ventaDolaresEfectivo <= 0 || costoDolaresEfectivo < 0) {
                     showToast('Los precios de venta deben ser mayores a cero y los costos no pueden ser negativos.', 'error');
                     return;
                 }
 
-                const valCosto = parseFloat(document.getElementById('calcCostoUsdt')?.value);
-                const valDesc = parseFloat(document.getElementById('calcDescuento')?.value);
-                const valGan = parseFloat(document.getElementById('calcGanancia')?.value);
-                calc_costo_$_efectivo = !isNaN(valCosto) && valCosto > 0 ? valCosto : (editCodigo && productoSeleccionado ? (productoSeleccionado.calc_costo_$_efectivo ?? null) : null);
-                calc_descuento = !isNaN(valDesc) ? valDesc : (editCodigo && productoSeleccionado ? (productoSeleccionado.calc_descuento ?? null) : null);
-                calc_ganancia = !isNaN(valGan) ? valGan : (editCodigo && productoSeleccionado ? (productoSeleccionado.calc_ganancia ?? null) : null);
+                calc_costo_$_efectivo = valCalcCosto > 0 ? valCalcCosto : (editCodigo && productoSeleccionado ? (productoSeleccionado.calc_costo_$_efectivo ?? null) : null);
+                calc_descuento = !isNaN(valCalcDesc) && valCalcDesc > 0 ? valCalcDesc : (editCodigo && productoSeleccionado ? (productoSeleccionado.calc_descuento ?? null) : null);
+                calc_ganancia = !isNaN(valCalcGan) && valCalcGan > 0 ? valCalcGan : (editCodigo && productoSeleccionado ? (productoSeleccionado.calc_ganancia ?? null) : null);
             }
 
             // Determinar la cantidad final
@@ -4475,37 +4460,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 cantidadFinal = parseInt(document.getElementById('prodCantidad').value, 10) || 0;
             }
 
-            const marcaFinal = document.getElementById('prodMarca').value;
-
-            const productData = {
-                categoria: document.getElementById('prodCategoria').value,
-                nombre: document.getElementById('prodNombre').value,
-                marca: marcaFinal,
-                ubicacion: document.getElementById('prodUbicacion').value.trim(),
-                cantidad: cantidadFinal,
-                precio_costo_dolares_bcv: parseFloat(precioCostoDolaresBcv) || 0,
-                precio_venta_dolares_bcv: parseFloat(precioVentaDolaresBcv) || 0,
-                venta_$_efectivo: parseFloat(ventaDolaresEfectivo) || 0,
-                costo_$_efectivo: parseFloat(costoDolaresEfectivo) || 0,
-                modo_creacion: mode,
-                calc_costo_$_efectivo: calc_costo_$_efectivo !== null ? (parseFloat(calc_costo_$_efectivo) || 0) : null,
-                calc_descuento: calc_descuento !== null ? (parseFloat(calc_descuento) || 0) : null,
-                calc_ganancia: calc_ganancia !== null ? (parseFloat(calc_ganancia) || 0) : null
-            };
+            const marcaFinal = document.getElementById('prodMarca').value || '';
 
             const nuevoCodigo = document.getElementById('prodCodigo').value.trim();
             if (!nuevoCodigo) {
                 showToast('El código del producto es obligatorio.', 'error');
                 return;
             }
-            productData.codigo = nuevoCodigo;
+
+            const productData = {
+                codigo: nuevoCodigo,
+                categoria: document.getElementById('prodCategoria').value,
+                nombre: document.getElementById('prodNombre').value.trim(),
+                marca: marcaFinal,
+                ubicacion: document.getElementById('prodUbicacion').value.trim(),
+                cantidad: cantidadFinal,
+                precio_costo_dolares_bcv: parseFloat(precioCostoDolaresBcv) || 0,
+                precio_venta_dolares_bcv: parseFloat(precioVentaDolaresBcv) || 0,
+                'venta_$_efectivo': parseFloat(ventaDolaresEfectivo) || 0,
+                'costo_$_efectivo': parseFloat(costoDolaresEfectivo) || 0,
+                modo_creacion: mode,
+                'calc_costo_$_efectivo': calc_costo_$_efectivo !== null ? (parseFloat(calc_costo_$_efectivo) || 0) : null,
+                calc_descuento: calc_descuento !== null ? (parseFloat(calc_descuento) || 0) : null,
+                calc_ganancia: calc_ganancia !== null ? (parseFloat(calc_ganancia) || 0) : null
+            };
 
             let error;
             if (editCodigo) {
                 // Si estamos editando y el código ha cambiado, verificar que el nuevo no exista
                 if (editCodigo !== nuevoCodigo) {
-                    const { data: existing } = await _supabase.from('productos').select('codigo').eq('codigo', nuevoCodigo).single();
-                    if (existing) {
+                    const { data: existingRows } = await _supabase.from('productos').select('codigo').eq('codigo', nuevoCodigo);
+                    if (existingRows && existingRows.length > 0) {
                         showToast(`El código '${nuevoCodigo}' ya está en uso.`, 'error');
                         return;
                     }
@@ -4514,8 +4499,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 error = updateError;
             } else {
                 // Si es un producto nuevo, verificar que el código no exista
-                const { data: existing } = await _supabase.from('productos').select('codigo').eq('codigo', nuevoCodigo).single();
-                if (existing) {
+                const { data: existingRows } = await _supabase.from('productos').select('codigo').eq('codigo', nuevoCodigo);
+                if (existingRows && existingRows.length > 0) {
                     showToast(`El código '${nuevoCodigo}' ya está en uso.`, 'error');
                     return;
                 }
@@ -4553,34 +4538,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const el = document.getElementById(id);
             if (el) {
                 el.addEventListener('input', () => {
-                    const precioProv = parseFloat(document.getElementById('calcCostoUsdt')?.value) || 0;
-                    const porcProv = parseFloat(document.getElementById('calcDescuento')?.value) || 0;
-                    const porcVenta = parseFloat(document.getElementById('calcGanancia')?.value) || 0;
-                    if (precioProv > 0) {
-                        const calculados = calcularPreciosPorcentaje(precioProv, porcProv, porcVenta);
-
-                        const resCostoEf = document.getElementById('resCostoEfectivo');
-                        const resCostoBcv = document.getElementById('resCostoBcv');
-                        const resVentaBcv = document.getElementById('resVentaBcv');
-                        const resVentaEf = document.getElementById('resVentaUsdt');
-                        const calcResults = document.getElementById('calculator-results');
-
-                        if (resCostoEf) resCostoEf.textContent = `$ ${formatCurrency(calculados.costoEfectivo)}`;
-                        if (resCostoBcv) resCostoBcv.textContent = `$ ${formatCurrency(calculados.costoUsdBcv)}`;
-                        if (resVentaBcv) resVentaBcv.textContent = `$ ${formatCurrency(calculados.ventaUsdBcv)}`;
-                        if (resVentaEf) resVentaEf.textContent = `$ ${formatCurrency(calculados.ventaEfectivo)}`;
-                        if (calcResults) calcResults.style.display = 'block';
-
-                        const prodCostoEf = document.getElementById('prodCostoDolaresEfectivo');
-                        const prodVentaEf = document.getElementById('prodUsdt');
-                        const prodCostoBcv = document.getElementById('prodCostoDolaresBcv');
-                        const prodVentaBcv = document.getElementById('prodVentaDolaresBcv');
-
-                        if (prodCostoEf) prodCostoEf.value = calculados.costoEfectivo;
-                        if (prodVentaEf) prodVentaEf.value = calculados.ventaEfectivo;
-                        if (prodCostoBcv) prodCostoBcv.value = calculados.costoUsdBcv;
-                        if (prodVentaBcv) prodVentaBcv.value = calculados.ventaUsdBcv;
-                    }
+                    actualizarResultadosCalculadora();
                 });
             }
         });
