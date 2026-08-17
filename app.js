@@ -3771,15 +3771,16 @@ document.getElementById('formDatosCliente')?.addEventListener('submit', async (e
         const ventaId = ventaData.id;
 
         for (const item of productosParaLlevar) {
-            // CORRECCIÓN: Guardar el precio_unitario correcto y un tipo de precio consistente
-            let priceToStoreInDetails;
-            if (useEfectivoTotal) {
-                priceToStoreInDetails = item.venta_$_efectivo;
-            } else {
-                priceToStoreInDetails = item.precio_venta_dolares_bcv;
-            }
+            const priceToStoreInDetails = useEfectivoTotal ? (item.venta_$_efectivo || 0) : (item.precio_venta_dolares_bcv || 0);
 
-            const { error: detalleError } = await _supabase.from('detalle_ventas').insert([{ venta_id: ventaId, producto_codigo: item.codigo, producto_nombre: item.nombre, cantidad: item.cantidadLlevar, precio_unitario: priceToStoreInDetails, tipo_precio_usado: useEfectivoTotal ? 'EFECTIVO' : 'BCV' }]);
+            const { error: detalleError } = await _supabase.from('detalle_ventas').insert([{
+                venta_id: ventaId,
+                producto_codigo: item.codigo,
+                producto_nombre: item.nombre,
+                cantidad: item.cantidadLlevar,
+                precio_unitario: priceToStoreInDetails,
+                tipo_precio_usado: useEfectivoTotal ? 'EFECTIVO' : 'BCV'
+            }]);
             if (detalleError) throw detalleError;
             if (!item.esAdicional) {
                 const nuevoStock = item.cantidad - item.cantidadLlevar;
@@ -3804,11 +3805,10 @@ document.getElementById('formDatosCliente')?.addEventListener('submit', async (e
                     producto_codigo: item.codigo,
                     producto_nombre: item.nombre,
                     cantidad: item.cantidadLlevar,
-                    // CORRECCIÓN: Pasar el precio_unitario correcto al PDF
-                    precio_unitario: priceToStoreInDetails, // Pass the stored price
+                    precio_unitario: useEfectivoTotal ? (item.venta_$_efectivo || 0) : (item.precio_venta_dolares_bcv || 0)
                 }))
             };
-            await generarFacturaPDF(ventaCompleta, paraleloRate, productosCache);
+            await generarFacturaPDF(ventaCompleta, currentRate, productosCache);
         }
 
         showToast('¡Venta registrada con éxito!', 'success');
