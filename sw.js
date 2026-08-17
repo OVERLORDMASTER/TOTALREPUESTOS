@@ -1,4 +1,4 @@
-const CACHE_NAME = 'omegapos-pwa-v1';
+const CACHE_NAME = 'omegapos-pwa-v2.1';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -8,6 +8,12 @@ const STATIC_ASSETS = [
     '/app.js',
     '/utils.js',
     '/generatepdf.js',
+    '/source/generatepdf.js',
+    '/source/factura.css',
+    '/source/factura.html',
+    '/source/factura_usd.html',
+    '/source/inventario_pdf.css',
+    '/source/inventario_pdf.html',
     '/imagen/logo.png',
     '/vistas/inicio.html',
     '/vistas/inventario.html',
@@ -18,30 +24,44 @@ const STATIC_ASSETS = [
     '/vistas/ajustes.html'
 ];
 
-// Instalación: Precarga de recursos esenciales
+// Instalación: Precarga de recursos esenciales y activación inmediata
 self.addEventListener('install', (event) => {
+    self.skipWaiting();
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
             return cache.addAll(STATIC_ASSETS).catch((err) => {
                 console.warn('Algunos recursos estáticos no pudieron ser precacheados:', err);
             });
-        }).then(() => self.skipWaiting())
+        })
     );
 });
 
-// Activación: Limpieza de versiones previas de caché y toma de control inmediata
+// Activación: Limpieza total de versiones previas de caché y toma de control inmediata
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cache) => {
                     if (cache !== CACHE_NAME) {
+                        console.log('Eliminando caché antigua:', cache);
                         return caches.delete(cache);
                     }
                 })
             );
         }).then(() => self.clients.claim())
     );
+});
+
+// Escuchar mensajes desde la aplicación (dashboard/index)
+self.addEventListener('message', (event) => {
+    if (event.data && (event.data.action === 'skipWaiting' || event.data === 'skipWaiting')) {
+        self.skipWaiting();
+    }
+    if (event.data && event.data.action === 'clearCache') {
+        caches.keys().then((keys) => {
+            return Promise.all(keys.map(k => caches.delete(k)));
+        });
+    }
 });
 
 // Estrategia Fetch: Red primero con respaldo en caché (Network-First falling back to cache)

@@ -15,15 +15,65 @@
     <meta name="apple-mobile-web-app-title" content="TOTAL REPUESTOS">
     <link rel="apple-touch-icon" href="/imagen/logo.png">
     <script>
-        // Registrar Service Worker para soporte PWA e instalación en Android / Desktop
+        // Gestión y Auto-Actualización de Service Worker / PWA
         if ('serviceWorker' in navigator) {
+            let isRefreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (isRefreshing) return;
+                isRefreshing = true;
+                console.log('🔄 Actualizando aplicación a la última versión...');
+                window.location.reload();
+            });
+
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').catch(err => console.warn('SW error:', err));
+                navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then((registration) => {
+                    // Si ya hay un worker esperando, forzar activación
+                    if (registration.waiting) {
+                        registration.waiting.postMessage({ action: 'skipWaiting' });
+                    }
+
+                    // Detectar nuevas actualizaciones en segundo plano
+                    registration.addEventListener('updatefound', () => {
+                        const newWorker = registration.installing;
+                        if (newWorker) {
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    console.log('📦 Nueva actualización lista, activando...');
+                                    newWorker.postMessage({ action: 'skipWaiting' });
+                                }
+                            });
+                        }
+                    });
+
+                    // Comprobar actualizaciones periódicamente y al enfocar la pantalla
+                    registration.update().catch(() => {});
+                    setInterval(() => registration.update().catch(() => {}), 5 * 60 * 1000);
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.visibilityState === 'visible') registration.update().catch(() => {});
+                    });
+                    window.addEventListener('focus', () => registration.update().catch(() => {}));
+                }).catch(err => console.warn('SW error:', err));
             });
         }
 
+        // Función global para forzar recarga limpia si se necesita
+        window.forzarActualizacionSistema = async function () {
+            try {
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (let reg of registrations) await reg.unregister();
+                }
+                if ('caches' in window) {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.map(k => caches.delete(k)));
+                }
+                window.location.href = window.location.pathname + '?nocache=' + Date.now();
+            } catch (e) {
+                window.location.reload();
+            }
+        };
+
         // Aplica el tema (claro/oscuro) guardado en localStorage para evitar el parpadeo.
-        // Este script se ejecuta antes de que se renderice el body.
         const THEME_KEY = 'appTheme';
         const savedTheme = localStorage.getItem(THEME_KEY) || 'dark';
         document.documentElement.dataset.theme = savedTheme;

@@ -512,26 +512,27 @@ function calcularPreciosPorcentaje(precioProv, porcDesc, porcGanancia, rateOfici
 }
 
 function actualizarResultadosCalculadora() {
-    let precioProv = parseSafeFloat(document.getElementById('calcCostoUsdt')?.value, 0);
-    if (precioProv <= 0) {
-        precioProv = parseSafeFloat(document.getElementById('prodCostoDolaresEfectivo')?.value, 0) ||
-            parseSafeFloat(document.getElementById('prodCostoDolaresBcv')?.value, 0);
-        if (precioProv > 0) {
-            const inputCosto = document.getElementById('calcCostoUsdt');
-            if (inputCosto) inputCosto.value = precioProv;
-        }
-    }
+    const inputCosto = document.getElementById('calcCostoUsdt');
+    const inputDesc = document.getElementById('calcDescuento');
+    const inputGan = document.getElementById('calcGanancia');
 
-    const porcProv = parseSafeFloat(document.getElementById('calcDescuento')?.value, 0);
-    const porcVenta = parseSafeFloat(document.getElementById('calcGanancia')?.value, 0);
+    const resCostoEf = document.getElementById('resCostoEfectivo');
+    const resCostoBcv = document.getElementById('resCostoBcv');
+    const resVentaBcv = document.getElementById('resVentaBcv');
+    const resVentaEf = document.getElementById('resVentaUsdt');
+    const calcResults = document.getElementById('calculator-results');
+
+    const prodCostoEf = document.getElementById('prodCostoDolaresEfectivo');
+    const prodVentaEf = document.getElementById('prodUsdt');
+    const prodCostoBcv = document.getElementById('prodCostoDolaresBcv');
+    const prodVentaBcv = document.getElementById('prodVentaDolaresBcv');
+
+    const precioProv = parseSafeFloat(inputCosto?.value, 0);
+    const porcProv = parseSafeFloat(inputDesc?.value, 0);
+    const porcVenta = parseSafeFloat(inputGan?.value, 0);
 
     if (precioProv > 0) {
         const calculados = calcularPreciosPorcentaje(precioProv, porcProv, porcVenta);
-        const resCostoEf = document.getElementById('resCostoEfectivo');
-        const resCostoBcv = document.getElementById('resCostoBcv');
-        const resVentaBcv = document.getElementById('resVentaBcv');
-        const resVentaEf = document.getElementById('resVentaUsdt');
-        const calcResults = document.getElementById('calculator-results');
 
         if (resCostoEf) resCostoEf.textContent = `$ ${formatCurrency(calculados.costoEfectivo)}`;
         if (resCostoBcv) resCostoBcv.textContent = `$ ${formatCurrency(calculados.costoUsdBcv)}`;
@@ -539,19 +540,26 @@ function actualizarResultadosCalculadora() {
         if (resVentaEf) resVentaEf.textContent = `$ ${formatCurrency(calculados.ventaEfectivo)}`;
         if (calcResults) calcResults.style.display = 'block';
 
-        const prodCostoEf = document.getElementById('prodCostoDolaresEfectivo');
-        const prodVentaEf = document.getElementById('prodUsdt');
-        const prodCostoBcv = document.getElementById('prodCostoDolaresBcv');
-        const prodVentaBcv = document.getElementById('prodVentaDolaresBcv');
-
         if (prodCostoEf) prodCostoEf.value = calculados.costoEfectivo;
         if (prodVentaEf) prodVentaEf.value = calculados.ventaEfectivo;
         if (prodCostoBcv) prodCostoBcv.value = calculados.costoUsdBcv;
         if (prodVentaBcv) prodVentaBcv.value = calculados.ventaUsdBcv;
 
         return calculados;
+    } else {
+        if (resCostoEf) resCostoEf.textContent = '$ 0.00';
+        if (resCostoBcv) resCostoBcv.textContent = '$ 0.00';
+        if (resVentaBcv) resVentaBcv.textContent = '$ 0.00';
+        if (resVentaEf) resVentaEf.textContent = '$ 0.00';
+        if (calcResults) calcResults.style.display = 'block';
+
+        if (prodCostoEf) prodCostoEf.value = 0;
+        if (prodVentaEf) prodVentaEf.value = 0;
+        if (prodCostoBcv) prodCostoBcv.value = 0;
+        if (prodVentaBcv) prodVentaBcv.value = 0;
+
+        return null;
     }
-    return null;
 }
 
 async function handleEditarProducto() {
@@ -3147,6 +3155,51 @@ function initVistaAjustes() {
         document.getElementById('btnReiniciarVentas')?.addEventListener('click', handleReiniciarVentas);
     }
     // --- FIN: Lógica para reiniciar ventas ---
+
+    // --- INICIO: Lógica para Actualizaciones y Limpieza de Caché ---
+    const btnBuscarActualizacion = document.getElementById('btnBuscarActualizacion');
+    if (btnBuscarActualizacion) {
+        btnBuscarActualizacion.addEventListener('click', async () => {
+            showToast('🔍 Verificando actualizaciones en el servidor...', 'info');
+            if ('serviceWorker' in navigator) {
+                try {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    if (reg) {
+                        await reg.update();
+                        if (reg.waiting) {
+                            showToast('⚡ Nueva versión encontrada. Aplicando cambios...', 'info');
+                            reg.waiting.postMessage({ action: 'skipWaiting' });
+                            return;
+                        }
+                    }
+                    showToast('✅ El sistema ya tiene instalada la última versión.', 'success');
+                } catch (err) {
+                    console.error(err);
+                    showToast('⚠️ No se pudo verificar la actualización.', 'error');
+                }
+            } else {
+                showToast('ℹ️ Service Worker no soportado en este navegador.', 'info');
+            }
+        });
+    }
+
+    const btnLimpiarCache = document.getElementById('btnLimpiarCache');
+    if (btnLimpiarCache) {
+        btnLimpiarCache.addEventListener('click', async () => {
+            const confirmar = confirm("¿Deseas vaciar la memoria caché y recargar la aplicación con los datos más recientes del servidor?");
+            if (!confirmar) return;
+
+            showToast('🧹 Limpiando caché y recargando sistema...', 'info');
+            setTimeout(() => {
+                if (typeof window.forzarActualizacionSistema === 'function') {
+                    window.forzarActualizacionSistema();
+                } else {
+                    window.location.reload();
+                }
+            }, 600);
+        });
+    }
+    // --- FIN: Lógica para Actualizaciones y Limpieza de Caché ---
 }
 
 function cargarAjustesTasa() {
@@ -4399,13 +4452,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Si está en modo calculadora o si el usuario llenó datos en la calculadora
             if (mode === 'calculator' || (valCalcCosto > 0 && mode !== 'manual')) {
                 mode = 'calculator';
-                let precioProv = valCalcCosto;
-
-                // Si precioProv está vacío o es 0, buscar en los campos manuales como respaldo
-                if (precioProv <= 0) {
-                    precioProv = parseSafeFloat(document.getElementById('prodCostoDolaresEfectivo')?.value, 0) ||
-                        parseSafeFloat(document.getElementById('prodCostoDolaresBcv')?.value, 0);
-                }
+                const precioProv = valCalcCosto;
 
                 if (precioProv <= 0) {
                     showToast('Ingresa un precio de proveedor válido mayor a 0.', 'error');

@@ -33,7 +33,32 @@ const WORKER_URL = process.env.WORKER_URL || 'https://total-repuestos.benjaminan
 // Middlewares
 app.use(cors(corsOptions));
 app.use(express.json());
-app.use(express.static(ROOT_DIR));
+
+// Servir archivos estáticos evitando caché obsoleta en sw.js, html y manifest
+app.use(express.static(ROOT_DIR, {
+    setHeaders: (res, filePath) => {
+        const normalized = filePath.toLowerCase().replace(/\\/g, '/');
+        if (
+            normalized.endsWith('/sw.js') || 
+            normalized.endsWith('.html') || 
+            normalized.endsWith('/manifest.json')
+        ) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+        }
+    }
+}));
+
+// Endpoint de versión para verificar conectividad y cambios
+app.get('/api/version', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.json({
+        version: '1.2.0',
+        timestamp: Date.now(),
+        status: 'online'
+    });
+});
 
 // API REST - Proxy de Autenticación
 app.post('/api/login', async (req, res) => {
