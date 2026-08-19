@@ -45,6 +45,17 @@ async function imageToBase64(url) {
     }
 }
 
+function formatFechaHoraLocal(fechaInput) {
+    const d = fechaInput ? new Date(fechaInput) : new Date();
+    const validDate = isNaN(d.getTime()) ? new Date() : d;
+    const year = validDate.getFullYear();
+    const month = String(validDate.getMonth() + 1).padStart(2, '0');
+    const day = String(validDate.getDate()).padStart(2, '0');
+    const hours = String(validDate.getHours()).padStart(2, '0');
+    const minutes = String(validDate.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 export async function generarFacturaPDF(venta, paraleloRate, productosCache = []) {
     console.log('Iniciando preparación de HTML para impresión para la venta ID:', venta.id);
 
@@ -98,7 +109,7 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     const currentUser = localStorage.getItem('usuario') || 'Sistema';
 
     doc.querySelector('#invoiceId')?.setAttribute('value', `#${venta.id}`);
-    doc.querySelector('#fechaHora')?.setAttribute('value', new Date(venta.fecha).toISOString().slice(0, 16));
+    doc.querySelector('#fechaHora')?.setAttribute('value', formatFechaHoraLocal(venta.fecha));
     doc.querySelector('#nombreCliente')?.setAttribute('value', venta.cliente_nombre || 'Consumidor Final');
     doc.querySelector('#cedula')?.setAttribute('value', venta.cliente_cedula || 'V-00000000');
     doc.querySelector('#direccion')?.setAttribute('value', venta.cliente_direccion || '');

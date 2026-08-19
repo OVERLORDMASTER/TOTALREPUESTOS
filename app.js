@@ -1277,13 +1277,27 @@ async function _deleteSaleAndRestoreStock(ventaParaEliminar) {
         // No intentar restaurar stock para items sin código o cantidad (ej. adicionales)
         if (!detalle.producto_codigo || !detalle.cantidad) continue;
 
-        const { data: productoActual, error: fetchError } = await _supabase
+        let productoActual = null;
+        const { data: pExact } = await _supabase
             .from('productos')
-            .select('cantidad')
+            .select('cantidad, codigo')
             .eq('codigo', detalle.producto_codigo)
-            .single();
+            .maybeSingle();
 
-        if (fetchError) {
+        if (pExact) {
+            productoActual = pExact;
+        } else {
+            const { data: pLike } = await _supabase
+                .from('productos')
+                .select('cantidad, codigo')
+                .ilike('codigo', `${detalle.producto_codigo}%`)
+                .limit(1);
+            if (pLike && pLike.length > 0) {
+                productoActual = pLike[0];
+            }
+        }
+
+        if (!productoActual) {
             // Si el producto ya no existe, no podemos restaurar stock, pero podemos continuar eliminando la venta.
             console.warn(`Producto con código ${detalle.producto_codigo} no encontrado. No se restaurará stock para este item.`);
         } else {
@@ -1291,7 +1305,7 @@ async function _deleteSaleAndRestoreStock(ventaParaEliminar) {
             const { error: updateError } = await _supabase
                 .from('productos')
                 .update({ cantidad: nuevoStock })
-                .eq('codigo', detalle.producto_codigo);
+                .eq('codigo', productoActual.codigo);
 
             if (updateError) {
                 throw new Error(`Fallo al actualizar el stock para ${detalle.producto_codigo}.`);
@@ -2543,7 +2557,10 @@ async function handleRegistrarDevolucion(ventaId) {
         const maxCantidad = parseInt(itemCard.dataset.maxCantidad, 10);
 
         // Verificar si el producto existe en el caché de productos antes de procesar la devolución
-        const productoEnCache = productosCache.find(p => p.codigo === productoCodigo);
+        let productoEnCache = productosCache.find(p => p.codigo === productoCodigo);
+        if (!productoEnCache && productoCodigo) {
+            productoEnCache = productosCache.find(p => p.codigo && p.codigo.startsWith(productoCodigo));
+        }
         if (!productoEnCache) {
             showToast(`El producto con código ${productoCodigo} no existe en el inventario y no puede ser devuelto.`, 'error');
             errorValidacion = true;
@@ -3762,69 +3779,85 @@ document.getElementById('formDatosCliente')?.addEventListener('submit', async (e
 
         const ventaInsertData = { cliente_nombre: nombre, cliente_cedula: cedulaCompleta, cliente_telefono: telefono, cliente_direccion: direccion, tipo_pago: tipoPago, total_usd: totalUsd, total_bs: totalBs, estado_pago: pagoPendiente ? 'pendiente' : 'pagado' };
 
-        const { data: ventaData, error: ventaError } = await _supabase
-            .from('ventas')
-            .insert([ventaInsertData])
-            .select()
-            .single();
-        if (ventaError) throw ventaError;
-        const ventaId = ventaData.id;
+        let ventaId = null;
+        try {
+            const { data: ventaData, error: ventaError } = await _supabase
+                .from('ventas')
+                .insert([ventaInsertData])
+                .select()
+                .single();
+            if (ventaError) throw ventaError;
+            ventaId = ventaData.id;
 
-        for (const item of productosParaLlevar) {
-            const priceToStoreInDetails = useEfectivoTotal ? (item.venta_$_efectivo || 0) : (item.precio_venta_dolares_bcv || 0);
+            for (const item of productosParaLlevar) {
+                const priceToStoreInDetails = useEfectivoTotal ? (item.venta_$_efectivo || 0) : (item.precio_venta_dolares_bcv || 0);
+                const codigoLimpio = String(item.codigo || '').slice(0, 20);
 
-            const { error: detalleError } = await _supabase.from('detalle_ventas').insert([{
-                venta_id: ventaId,
-                producto_codigo: item.codigo,
-                producto_nombre: item.nombre,
-                cantidad: item.cantidadLlevar,
-                precio_unitario: priceToStoreInDetails,
-                tipo_precio_usado: useEfectivoTotal ? 'EFECTIVO' : 'BCV'
-            }]);
-            if (detalleError) throw detalleError;
-            if (!item.esAdicional) {
-                const nuevoStock = item.cantidad - item.cantidadLlevar;
-                await _supabase.from('productos').update({ cantidad: nuevoStock }).eq('codigo', item.codigo);
-            }
-        }
-
-        // Actualizar el caché de productos localmente para reflejar el nuevo stock
-        productosParaLlevar.forEach(itemVendido => {
-            if (!itemVendido.esAdicional) {
-                const productoEnCache = productosCache.find(p => p.codigo === itemVendido.codigo);
-                if (productoEnCache) {
-                    productoEnCache.cantidad -= itemVendido.cantidadLlevar;
-                }
-            }
-        });
-
-        if (emitirFactura) {
-            const ventaCompleta = {
-                ...ventaData,
-                detalles: productosParaLlevar.map(item => ({
-                    producto_codigo: item.codigo,
+                const { error: detalleError } = await _supabase.from('detalle_ventas').insert([{
+                    venta_id: ventaId,
+                    producto_codigo: codigoLimpio,
                     producto_nombre: item.nombre,
                     cantidad: item.cantidadLlevar,
-                    precio_unitario: useEfectivoTotal ? (item.venta_$_efectivo || 0) : (item.precio_venta_dolares_bcv || 0)
-                }))
-            };
-            await generarFacturaPDF(ventaCompleta, currentRate, productosCache);
-        }
+                    precio_unitario: priceToStoreInDetails,
+                    tipo_precio_usado: String(useEfectivoTotal ? 'EFECTIVO' : 'BCV').slice(0, 20)
+                }]);
+                if (detalleError) throw detalleError;
+                if (!item.esAdicional) {
+                    const nuevoStock = item.cantidad - item.cantidadLlevar;
+                    await _supabase.from('productos').update({ cantidad: nuevoStock }).eq('codigo', item.codigo);
+                }
+            }
 
-        showToast('¡Venta registrada con éxito!', 'success');
-        document.getElementById('modalVenta').classList.remove('active');
-        document.getElementById('formDatosCliente').reset();
-        productosParaLlevar = [];
-        renderizarParaLlevar();
-        socket.emit('cambio-dato', { type: 'products' });
-        socket.emit('cambio-dato', { type: 'ventas' });
+            // Actualizar el caché de productos localmente para reflejar el nuevo stock
+            productosParaLlevar.forEach(itemVendido => {
+                if (!itemVendido.esAdicional) {
+                    const productoEnCache = productosCache.find(p => p.codigo === itemVendido.codigo);
+                    if (productoEnCache) {
+                        productoEnCache.cantidad -= itemVendido.cantidadLlevar;
+                    }
+                }
+            });
 
-        // Refrescar la vista actual de forma inteligente
-        const vistaActiva = document.querySelector('.nav-btn.active').textContent.trim().toLowerCase();
-        if (vistaActiva === 'caja') {
-            renderCajaProductos(productosCache); // Re-renderiza solo la lista de productos disponibles
-        } else if (vistaActiva === 'inventario de productos') {
-            loadProducts(); // Recarga los productos en la vista de inventario
+            if (emitirFactura) {
+                const ventaCompleta = {
+                    ...ventaData,
+                    detalles: productosParaLlevar.map(item => ({
+                        producto_codigo: item.codigo,
+                        producto_nombre: item.nombre,
+                        cantidad: item.cantidadLlevar,
+                        precio_unitario: useEfectivoTotal ? (item.venta_$_efectivo || 0) : (item.precio_venta_dolares_bcv || 0)
+                    }))
+                };
+                await generarFacturaPDF(ventaCompleta, currentRate, productosCache);
+            }
+
+            showToast('¡Venta registrada con éxito!', 'success');
+            document.getElementById('modalVenta').classList.remove('active');
+            document.getElementById('formDatosCliente').reset();
+            productosParaLlevar = [];
+            renderizarParaLlevar();
+            socket.emit('cambio-dato', { type: 'products' });
+            socket.emit('cambio-dato', { type: 'ventas' });
+
+            // Refrescar la vista actual de forma inteligente
+            const vistaActiva = document.querySelector('.nav-btn.active').textContent.trim().toLowerCase();
+            if (vistaActiva === 'caja') {
+                renderCajaProductos(productosCache); // Re-renderiza solo la lista de productos disponibles
+            } else if (vistaActiva === 'inventario de productos') {
+                loadProducts(); // Recarga los productos en la vista de inventario
+            }
+        } catch (innerErr) {
+            // Si ocurrió un error en los items o stock, revertir la venta para que no quede huérfana
+            if (ventaId) {
+                console.warn(`Revirtiendo venta huérfana #${ventaId} debido a error:`, innerErr);
+                try {
+                    await _supabase.from('detalle_ventas').delete().eq('venta_id', ventaId);
+                    await _supabase.from('ventas').delete().eq('id', ventaId);
+                } catch (rollbackErr) {
+                    console.error('Error al revertir venta huérfana:', rollbackErr);
+                }
+            }
+            throw innerErr;
         }
 
     } catch (error) {

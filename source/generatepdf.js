@@ -38,6 +38,17 @@ function construirNombreArchivoFactura(venta) {
     return `${cleanNombre}`;
 }
 
+function formatFechaHoraLocal(fechaInput) {
+    const d = fechaInput ? new Date(fechaInput) : new Date();
+    const validDate = isNaN(d.getTime()) ? new Date() : d;
+    const year = validDate.getFullYear();
+    const month = String(validDate.getMonth() + 1).padStart(2, '0');
+    const day = String(validDate.getDate()).padStart(2, '0');
+    const hours = String(validDate.getHours()).padStart(2, '0');
+    const minutes = String(validDate.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 export async function generarFacturaPDF(venta, paraleloRate, productosCache = []) {
     console.log('Iniciando preparación de HTML para impresión para la venta ID:', venta.id);
 
@@ -107,7 +118,7 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     const currentUser = localStorage.getItem('usuario') || 'Sistema';
 
     doc.querySelector('#invoiceId')?.setAttribute('value', `#${venta.id}`);
-    doc.querySelector('#fechaHora')?.setAttribute('value', new Date(venta.fecha).toISOString().slice(0, 16));
+    doc.querySelector('#fechaHora')?.setAttribute('value', formatFechaHoraLocal(venta.fecha));
     doc.querySelector('#nombreCliente')?.setAttribute('value', venta.cliente_nombre || 'Consumidor Final');
     doc.querySelector('#cedula')?.setAttribute('value', venta.cliente_cedula || 'V-00000000');
     doc.querySelector('#direccion')?.setAttribute('value', venta.cliente_direccion || '');
@@ -236,7 +247,7 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     detallesValidos.forEach(item => {
         const qty = Number(item.cantidad) || 0;
         const precioUnitarioStored = Number(item.precio_unitario) || 0; // This now holds the correct price (BCV or Efectivo)
-        const producto = productosCache.find(p => p.codigo === (item.producto_codigo || '')); // Still useful for brand
+        const producto = productosCache.find(p => p.codigo === (item.producto_codigo || '')) || (item.producto_codigo ? productosCache.find(p => p.codigo && p.codigo.startsWith(item.producto_codigo)) : null); // Still useful for brand
         const marca = producto ? (producto.marca || 'N/A') : 'N/A'; // Brand is not stored in detalle_ventas
 
         let precioUnitarioDisplay, subtotalDisplay;
