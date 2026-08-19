@@ -81,12 +81,12 @@
             <table id="itemsTable">
                 <thead>
                     <tr>
-                        <th style="width: 10%;">CÓDIGO</th>
+                        <th style="width: 11%;">CÓDIGO</th>
+                        <th style="width: 9%;">UNIDADES</th>
                         <th style="width: 33%;">DESCRIPCIÓN</th>
-                        <th style="width: 12%;">MARCA</th>
-                        <th style="width: 7%;">UNIDADES</th>
-                        <th style="width: 14%;">PRECIO UNITARIO BS</th>
-                        <th style="width: 14%;">SUBTOTAL BS</th>
+                        <th style="width: 11%;">MARCA</th>
+                        <th style="width: 13%;">PRECIO UNITARIO BS</th>
+                        <th style="width: 13%;">SUBTOTAL BS</th>
                         <th class="no-print" style="width: 10%;">ACCIÓN</th>
                     </tr>
                 </thead>
@@ -102,7 +102,7 @@
         <div class="footer-section">
             <div class="totals-box">
                 <div class="total-field">
-                    <span>TOTAL BS (BCV):</span>
+                    <span>TOTAL BS:</span>
                     <input type="text" id="totalBS" value="0.00" readonly>
                 </div>
             </div>
@@ -135,9 +135,9 @@
 
             row.innerHTML = `
             <td><input type="text" class="codigo"></td>
+            <td><input type="number" class="uds" value="1" oninput="calculateRowBS(this)"></td>
             <td><input type="text" class="text-left descripcion"></td>
             <td><input type="text" class="marca"></td>
-            <td><input type="number" class="uds" value="1" oninput="calculateRowBS(this)"></td>
             <td><input type="number" step="0.01" class="precioBS" oninput="calculateRowBS(this)"></td>
             <td><input type="text" class="subtotalBS" value="0.00" readonly></td>
             <td class="no-print"><button type="button" class="btn btn-danger" style="padding: 2px 8px; font-size: 11px; border-radius: 4px;" onclick="deleteRow(this)">X</button></td>
@@ -151,13 +151,21 @@
             calculateTotals();
         }
 
+        function formatCurrencyVE(number) {
+            const val = Number.isFinite(Number(number)) ? Number(number) : 0;
+            const parts = val.toFixed(2).split('.');
+            const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            return `${intPart},${parts[1]}`;
+        }
+
         function calculateRowBS(element) {
             const row = element.closest('tr');
             const precioBS = parseFloat(row.querySelector('.precioBS').value) || 0;
             const uds = parseFloat(row.querySelector('.uds').value) || 0;
 
             const subtotalBS = precioBS * uds;
-            row.querySelector('.subtotalBS').value = subtotalBS.toFixed(2);
+            row.querySelector('.subtotalBS').value = formatCurrencyVE(subtotalBS);
+            row.querySelector('.subtotalBS').dataset.raw = subtotalBS;
 
             calculateTotals();
         }
@@ -166,10 +174,11 @@
             let totalBS = 0;
 
             document.querySelectorAll('.subtotalBS').forEach(input => {
-                totalBS += parseFloat(input.value) || 0;
+                const rawVal = parseFloat(input.dataset.raw) || parseFloat(input.value.replace(/\./g, '').replace(',', '.')) || 0;
+                totalBS += rawVal;
             });
 
-            document.getElementById('totalBS').value = totalBS.toFixed(2);
+            document.getElementById('totalBS').value = formatCurrencyVE(totalBS);
         }
 
         function clearForm() {

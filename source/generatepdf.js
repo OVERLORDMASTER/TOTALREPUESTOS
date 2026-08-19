@@ -135,9 +135,9 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
                 const isBs = p.moneda === 'BS' || ['Pago Móvil', 'Bolívares en efectivo'].includes(p.metodo);
                 let displayMonto = '';
                 if (p.monto_original !== undefined && p.monto_original !== null && !isNaN(parseFloat(p.monto_original))) {
-                    displayMonto = isBs ? `Bs ${parseFloat(p.monto_original).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$ ${parseFloat(p.monto_original).toFixed(2)}`;
+                    displayMonto = isBs ? `Bs ${formatCurrency(p.monto_original)}` : `$ ${formatCurrency(p.monto_original)}`;
                 } else if (p.monto !== undefined && p.monto !== null && !isNaN(parseFloat(p.monto))) {
-                    displayMonto = isBs ? `Bs ${(parseFloat(p.monto) * saleRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$ ${parseFloat(p.monto).toFixed(2)}`;
+                    displayMonto = isBs ? `Bs ${formatCurrency(parseFloat(p.monto) * saleRate)}` : `$ ${formatCurrency(p.monto)}`;
                 }
                 return `<span class="payment-method-badge">${p.metodo}${displayMonto ? ': ' + displayMonto : ''}</span>`;
             }).join('');
@@ -190,12 +190,25 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
         #tableBody td .text-left {
             text-align: left;
         }
+        #tipoPagoContainer {
+            min-width: 0;
+            flex-wrap: wrap;
+            height: auto;
+            min-height: 38px;
+            overflow: hidden;
+        }
+        #tipoPagoContainer label {
+            flex-shrink: 0;
+            margin-right: 6px;
+            white-space: nowrap;
+        }
         .payment-methods-list {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
-            gap: 12px;
+            gap: 6px 10px;
             flex: 1;
+            min-width: 0;
         }
         .payment-method-badge {
             display: inline-flex;
@@ -203,9 +216,10 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
             background-color: transparent !important;
             color: #111 !important;
             padding: 0;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
-            white-space: nowrap;
+            white-space: normal;
+            word-break: break-word;
             margin: 0;
         }
         /* HACK: Cubierta para tapar el pie de página del navegador (URL, fecha, etc.) */
@@ -225,7 +239,7 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
                 print-color-adjust: exact;
                 background-color: transparent !important;
                 color: #000 !important;
-                font-size: 13px !important;
+                font-size: 12px !important;
                 font-weight: 600 !important;
             }
         }
@@ -265,9 +279,9 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
         const row = doc.createElement('tr');
         row.innerHTML = `
             <td><div class="codigo">${item.producto_codigo || ''}</div></td>
+            <td><div class="uds">${formatInteger(qty)}</div></td>
             <td><div class="text-left descripcion">${item.producto_nombre || ''}</div></td>
             <td><div>${marca}</div></td>
-            <td><div class="uds">${formatInteger(qty)}</div></td>
             <td><div class="precioBS">${precioUnitarioDisplay}</div></td>
             <td><div class="subtotalBS">${subtotalDisplay}</div></td>
             <td class="no-print"></td>

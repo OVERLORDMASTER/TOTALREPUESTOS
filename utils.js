@@ -72,10 +72,12 @@ export async function showConfirmation(message, onConfirm) {
  */
 export function formatCurrency(number) {
     const val = Number.isFinite(Number(number)) ? Number(number) : 0;
-    return new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+    const parts = val.toFixed(2).split('.');
+    const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return `${intPart},${parts[1]}`;
 }
 
 export function formatInteger(number) {
     const val = Number.isFinite(Number(number)) ? Math.round(Number(number)) : 0;
-    return new Intl.NumberFormat('es-VE').format(val);
+    return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }

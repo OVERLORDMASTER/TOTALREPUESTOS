@@ -1,4 +1,4 @@
-const CACHE_NAME = 'omegapos-pwa-v2.3';
+const CACHE_NAME = 'omegapos-pwa-v2.6';
 const STATIC_ASSETS = [
     '/',
     '/index.html',

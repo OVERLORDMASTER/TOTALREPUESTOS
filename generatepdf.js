@@ -14,13 +14,14 @@ import { showToast } from './utils.js';
  * Ej: 1234.56 -> 1.234,56
  */
 function formatCurrency(number) {
-    return new Intl.NumberFormat('es-VE', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }).format(number);
+    const val = Number.isFinite(Number(number)) ? Number(number) : 0;
+    const parts = val.toFixed(2).split('.');
+    const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return `${intPart},${parts[1]}`;
 }
 function formatInteger(number) {
-    return new Intl.NumberFormat('es-VE').format(number);
+    const val = Number.isFinite(Number(number)) ? Math.round(Number(number)) : 0;
+    return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
 /**
@@ -159,11 +160,11 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
         const row = doc.createElement('tr');
         row.innerHTML = `
             <td><div class="codigo">${item.producto_codigo || ''}</div></td>
+            <td><div class="uds">${formatInteger(item.cantidad)}</div></td>
             <td><div class="text-left descripcion">${item.producto_nombre || ''}</div></td>
             <td><div>${marca}</div></td>
             <td><div class="precioBS">${precioUnitarioBs}</div></td>
             <td><div class="subtotalBS">${subtotalBs}</div></td>
-            <td><div class="uds">${formatInteger(item.cantidad)}</div></td>
             <td class="no-print"></td>
         `;
         tableBody.appendChild(row);
