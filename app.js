@@ -1,5 +1,5 @@
 import { generarFacturaPDF, generarInventarioPDF } from './source/generatepdf.js';
-import { showToast, showConfirmation, formatCurrency, formatInteger } from './utils.js';
+import { showToast, showConfirmation, formatCurrency, formatInteger, filtrarProductosFuzzy } from './utils.js';
 
 // Conexión a Supabase
 const SUPABASE_URL = 'https://tqlbmcqkottvclikpxur.supabase.co';
@@ -363,9 +363,8 @@ async function obtenerTasas() {
 function initVistaInventario() {
     loadProducts();
     document.getElementById('productSearch')?.addEventListener('input', (e) => {
-        const term = e.target.value.toLowerCase().trim();
-        if (!term) { renderProducts(productosCache); return; }
-        renderProducts(productosCache.filter(p => p.nombre.toLowerCase().includes(term) || p.codigo.toLowerCase().includes(term)));
+        const filteredProducts = filtrarProductosFuzzy(productosCache, e.target.value);
+        renderProducts(filteredProducts);
     });
 
     document.querySelectorAll('.inventory-edit-btn').forEach((btn) => {
@@ -377,18 +376,10 @@ function initVistaInventario() {
     });
 
     document.querySelectorAll('.inventory-print-btn').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-            const originalText = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = 'Generando PDF...';
-            try {
-                await generarInventarioPDF(productosCache);
-            } catch (error) {
-                console.error('Error al generar el PDF de inventario:', error);
-                showToast('No se pudo generar el PDF.', 'error');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = originalText;
+        btn.addEventListener('click', () => {
+            const modal = document.getElementById('modalOpcionesInventarioPDF');
+            if (modal) {
+                modal.classList.add('active');
             }
         });
     });
@@ -418,7 +409,12 @@ async function loadProducts() {
         productosCache = [];
         return;
     }
-    renderProducts(productosCache);
+    const currentSearch = document.getElementById('productSearch')?.value;
+    if (currentSearch && currentSearch.trim()) {
+        renderProducts(filtrarProductosFuzzy(productosCache, currentSearch));
+    } else {
+        renderProducts(productosCache);
+    }
 }
 
 function renderProducts(productsToRender) {
@@ -700,11 +696,7 @@ async function initVistaCaja() {
     // --- FIN: Nueva lógica de acordeón dinámico con animación ---
 
     document.getElementById('cajaProductSearch')?.addEventListener('input', (e) => {
-        const term = e.target.value.toLowerCase().trim();
-        const filteredProducts = productosCache.filter(p =>
-            p.nombre.toLowerCase().includes(term) ||
-            p.codigo.toLowerCase().includes(term)
-        );
+        const filteredProducts = filtrarProductosFuzzy(productosCache, e.target.value);
         renderCajaProductos(filteredProducts);
     });
 }
@@ -745,6 +737,10 @@ function renderCajaProductos(productsToRender) {
                     <div class="caja-v-item">
                         <label>Nombre</label>
                         <span>${p.nombre}</span>
+                    </div>
+                    <div class="caja-v-item">
+                        <label>Ubicación</label>
+                        <span>${p.ubicacion || ''}</span>
                     </div>
                     <div class="caja-v-item">
                         <label>Precio de venta Bs (BCV)</label>
@@ -3278,9 +3274,26 @@ document.addEventListener('click', (e) => {
             modal.classList.add('active');
         }
     }
-    if (e.target.matches('[data-modal-close]')) {
+    if (e.target.matches('[data-modal-close]') || e.target.closest('[data-modal-close]')) {
         const modal = e.target.closest('.modal-overlay');
         if (modal) modal.classList.remove('active');
+    }
+
+    // Opciones para imprimir reporte de inventario
+    const btnOpcionInv = e.target.closest('.btn-opcion-print-inv');
+    if (btnOpcionInv) {
+        const tipo = btnOpcionInv.dataset.tipo || 'conteo';
+        const modal = document.getElementById('modalOpcionesInventarioPDF');
+        if (modal) modal.classList.remove('active');
+
+        const detailsDropdown = document.querySelector('details.tools-dropdown');
+        if (detailsDropdown) detailsDropdown.removeAttribute('open');
+
+        showToast('Preparando lista de inventario...', 'info', 2000);
+        generarInventarioPDF(productosCache, tipo).catch((error) => {
+            console.error('Error al generar el PDF de inventario:', error);
+            showToast('No se pudo generar el PDF de inventario.', 'error');
+        });
     }
 
     // Botones de la vista CAJA
@@ -3842,7 +3855,9 @@ document.getElementById('formDatosCliente')?.addEventListener('submit', async (e
             // Refrescar la vista actual de forma inteligente
             const vistaActiva = document.querySelector('.nav-btn.active').textContent.trim().toLowerCase();
             if (vistaActiva === 'caja') {
-                renderCajaProductos(productosCache); // Re-renderiza solo la lista de productos disponibles
+                const currentCajaSearch = document.getElementById('cajaProductSearch')?.value;
+                const prods = (currentCajaSearch && currentCajaSearch.trim()) ? filtrarProductosFuzzy(productosCache, currentCajaSearch) : productosCache;
+                renderCajaProductos(prods);
             } else if (vistaActiva === 'inventario de productos') {
                 loadProducts(); // Recarga los productos en la vista de inventario
             }

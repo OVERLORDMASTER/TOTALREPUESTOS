@@ -20,21 +20,25 @@
             </div>
         </div>
         <div class="title-section" style="text-align: right;">
-            <div style="font-weight: bold; font-size: 13.5px; margin-bottom: 6px; color: #2c3e50; text-transform: uppercase; letter-spacing: 0.5px;">LISTA DE INVENTARIO</div>
+            <div id="pdfHeaderTitle" style="font-weight: bold; font-size: 13.5px; margin-bottom: 6px; color: #2c3e50; text-transform: uppercase; letter-spacing: 0.5px;">LISTA DE INVENTARIO</div>
         </div>
     </div>
 
     <div class="form-row">
-        <div class="field-group" style="flex: 2.2;">
-            <label>FECHA DE IMPRESIÓN :</label>
+        <div class="field-group" style="flex: 1.8;">
+            <label>FECHA :</label>
             <input type="text" id="fechaImpresion" readonly>
         </div>
-        <div class="field-group" style="flex: 1.4;">
-            <label>TOTAL PRODUCTOS (SKU) :</label>
+        <div class="field-group" style="flex: 2.2;">
+            <label>TIPO :</label>
+            <input type="text" id="tipoReporte" readonly style="font-weight: 700; color: #1e293b;">
+        </div>
+        <div class="field-group" style="flex: 1.1;">
+            <label>SKU :</label>
             <input type="text" id="totalProductos" readonly style="font-weight: bold; text-align: center;">
         </div>
-        <div class="field-group" style="flex: 1.4;">
-            <label>TOTAL DE UNIDADES :</label>
+        <div class="field-group" style="flex: 1.1;">
+            <label>UNIDADES :</label>
             <input type="text" id="totalUnidades" readonly style="font-weight: bold; text-align: center;">
         </div>
     </div>
@@ -43,10 +47,12 @@
         <table id="itemsTable">
             <thead>
                 <tr>
-                    <th style="width: 18%;">CÓDIGO</th>
-                    <th style="width: 52%;">PRODUCTO</th>
-                    <th style="width: 15%;">CANTIDAD</th>
-                    <th style="width: 15%;">VERIFICADO</th>
+                    <th style="width: 14%;">CÓDIGO</th>
+                    <th style="width: 38%;">PRODUCTO</th>
+                    <th style="width: 12%;">CANTIDAD</th>
+                    <th style="width: 12%;">COSTO ($)</th>
+                    <th style="width: 12%;">VENTA ($)</th>
+                    <th style="width: 12%;">VERIFICADO</th>
                 </tr>
             </thead>
             <tbody id="tableBody">

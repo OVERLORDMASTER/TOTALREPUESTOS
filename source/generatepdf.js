@@ -347,8 +347,27 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     });
 }
 
-export async function generarInventarioPDF(productosCache = []) {
-    console.log('Iniciando preparación de PDF de inventario...');
+export async function generarInventarioPDF(productosCache = [], tipoFiltro = 'conteo') {
+    console.log('Iniciando preparación de PDF de inventario. Tipo:', tipoFiltro);
+
+    // Ambos reportes muestran todos los productos registrados
+    const productosAImprimir = [...productosCache];
+
+    const esConteoVacio = (tipoFiltro === 'conteo' || tipoFiltro === 'vacio');
+    let tipoTexto = 'INVENTARIO SIN STOCK';
+    let headerTitulo = 'LISTA DE INVENTARIO - SIN STOCK';
+    let prefijoArchivo = 'inventario_sin_stock';
+
+    if (!esConteoVacio) {
+        tipoTexto = 'INVENTARIO CON STOCK';
+        headerTitulo = 'LISTA DE INVENTARIO - CON STOCK';
+        prefijoArchivo = 'inventario_con_stock';
+    }
+
+    if (productosAImprimir.length === 0) {
+        showToast('No se encontraron productos en el inventario.', 'info');
+        return;
+    }
 
     const [htmlResponse, cssResponse] = await Promise.all([
         fetch('source/inventario_pdf.html'),
@@ -378,7 +397,7 @@ export async function generarInventarioPDF(productosCache = []) {
         doc.head.appendChild(titleTagInv);
     }
     const fechaArchivo = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const nombreArchivoInv = `inventario_${fechaArchivo}`;
+    const nombreArchivoInv = `${prefijoArchivo}_${fechaArchivo}`;
     titleTagInv.textContent = nombreArchivoInv;
     const tituloOriginal = document.title;
 
@@ -394,19 +413,34 @@ export async function generarInventarioPDF(productosCache = []) {
         console.error('Error al procesar el logo del inventario:', error);
     }
 
-    // Llenar información de resumen
+    // Llenar información de resumen en cabecera
+    const headerTitleEl = doc.querySelector('#pdfHeaderTitle');
+    if (headerTitleEl) {
+        headerTitleEl.textContent = headerTitulo;
+    }
+
     const fechaEl = doc.querySelector('#fechaImpresion');
     if (fechaEl) {
         fechaEl.setAttribute('value', new Date().toLocaleString('es-VE'));
     }
+
+    const tipoReporteEl = doc.querySelector('#tipoReporte');
+    if (tipoReporteEl) {
+        tipoReporteEl.setAttribute('value', tipoTexto);
+    }
+
     const totalProdEl = doc.querySelector('#totalProductos');
     if (totalProdEl) {
-        totalProdEl.setAttribute('value', formatInteger(productosCache.length));
+        totalProdEl.setAttribute('value', formatInteger(productosAImprimir.length));
     }
-    const totalUnidades = productosCache.reduce((sum, p) => sum + (Number(p.cantidad) || 0), 0);
     const totalUniEl = doc.querySelector('#totalUnidades');
     if (totalUniEl) {
-        totalUniEl.setAttribute('value', formatInteger(totalUnidades));
+        if (esConteoVacio) {
+            totalUniEl.setAttribute('value', '___');
+        } else {
+            const totalUnidades = productosAImprimir.reduce((sum, p) => sum + (Number(p.cantidad) || 0), 0);
+            totalUniEl.setAttribute('value', formatInteger(totalUnidades));
+        }
     }
 
     // Añadir el elemento de la tabla
@@ -415,7 +449,7 @@ export async function generarInventarioPDF(productosCache = []) {
     if (templateTbody) templateTbody.remove();
 
     const grouped = {};
-    productosCache.forEach(p => {
+    productosAImprimir.forEach(p => {
         const cat = p.categoria && p.categoria.trim() !== '' ? p.categoria : 'Sin Categoría';
         if (!grouped[cat]) grouped[cat] = [];
         grouped[cat].push(p);
@@ -429,16 +463,27 @@ export async function generarInventarioPDF(productosCache = []) {
 
         const catRow = doc.createElement('tr');
         catRow.className = 'category-header-row';
-        catRow.innerHTML = `<td colspan="4">${categoria}</td>`;
+        catRow.innerHTML = `<td colspan="6">${categoria}</td>`;
         categoryTbody.appendChild(catRow);
 
         const prods = grouped[categoria].sort((a, b) => a.nombre.localeCompare(b.nombre));
         prods.forEach(item => {
             const row = doc.createElement('tr');
+            const costoVal = parseFloat(item.precio_costo_dolares_bcv) || parseFloat(item['costo_$_efectivo']) || 0;
+            const ventaVal = parseFloat(item.precio_venta_dolares_bcv) || parseFloat(item['venta_$_efectivo']) || 0;
+            const costoFormatted = `$ ${formatCurrency(costoVal)}`;
+            const ventaFormatted = `$ ${formatCurrency(ventaVal)}`;
+
+            const cantidadHtml = esConteoVacio
+                ? ''
+                : `<span style="font-weight: 700;">${formatInteger(item.cantidad)}</span>`;
+
             row.innerHTML = `
                 <td><div>${item.codigo || ''}</div></td>
                 <td><div class="text-left">${item.nombre || ''}</div></td>
-                <td><div style="font-weight: 600;">${formatInteger(item.cantidad)}</div></td>
+                <td><div>${cantidadHtml}</div></td>
+                <td><div style="font-weight: 600; color: #1e293b;">${costoFormatted}</div></td>
+                <td><div style="font-weight: 700; color: #16a34a;">${ventaFormatted}</div></td>
                 <td class="checkbox-cell"><span class="checkbox-box"></span></td>
             `;
             categoryTbody.appendChild(row);

@@ -628,6 +628,37 @@
         </div>
     </div>
 
+    <!-- NUEVO: Modal Emergente: Opciones de Impresión de Inventario -->
+    <div class="modal-overlay" id="modalOpcionesInventarioPDF">
+        <div class="modal-container" style="max-width: 440px;">
+            <div class="modal-header">
+                <h3>Imprimir Inventario</h3>
+                <button type="button" data-modal-close
+                    style="background:none; border:none; color:var(--text-muted); font-size:1.2rem; cursor:pointer;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 12px 0;">
+                <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 16px; text-align: left;">
+                    Selecciona el formato de inventario que deseas imprimir:
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <button type="button" class="action-btn btn-green btn-opcion-print-inv" data-tipo="conteo"
+                        style="padding: 14px 18px; text-align: center; border-radius: 8px; border: none; cursor: pointer; font-size: 1rem; font-weight: 600;">
+                        Imprimir inventario sin stock
+                    </button>
+
+                    <button type="button" class="action-btn btn-blue btn-opcion-print-inv" data-tipo="full"
+                        style="padding: 14px 18px; text-align: center; border-radius: 8px; border: none; cursor: pointer; font-size: 1rem; font-weight: 600;">
+                        Imprimir inventario con stock
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer" style="margin-top: 15px;">
+                <button type="button" data-modal-close class="action-btn"
+                    style="background: #475569; padding: 8px 18px; border-radius: 6px; color: white;">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toastContainer"></div>
 
     <script type="module" src="app.js" defer></script>
