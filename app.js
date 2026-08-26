@@ -731,32 +731,36 @@ function renderCajaProductos(productsToRender) {
             return `
                 <div class="product-card-caja-vertical">
                     <div class="caja-v-item">
-                        <label>Código</label>
-                        <span>${p.codigo}</span>
+                        <label>código</label>
+                        <div class="product-card-value">${p.codigo}</div>
                     </div>
                     <div class="caja-v-item">
-                        <label>Nombre</label>
-                        <span>${p.nombre}</span>
+                        <label>nombre</label>
+                        <div class="product-card-value">${p.nombre}</div>
                     </div>
                     <div class="caja-v-item">
-                        <label>Ubicación</label>
-                        <span>${p.ubicacion || ''}</span>
+                        <label>marca</label>
+                        <div class="product-card-value">${p.marca || ''}</div>
                     </div>
                     <div class="caja-v-item">
-                        <label>Precio de venta Bs (BCV)</label>
-                        <span style="color: var(--text-primary); font-weight: bold;">${precioVentaBsBcv}</span>
+                        <label>ubicación</label>
+                        <div class="product-card-value">${p.ubicacion || ''}</div>
                     </div>
                     <div class="caja-v-item">
-                        <label>Precio Dólares (BCV)</label>
-                        <span style="color: var(--btn-green); font-weight: bold;">${precioVentaDolares}</span>
+                        <label>cantidad</label>
+                        <div class="product-card-value">${formatInteger(p.cantidad)}</div>
                     </div>
                     <div class="caja-v-item">
-                        <label>Precio en Efectivo</label>
-                        <span style="color: var(--btn-orange); font-weight: bold;">${formatCurrency(p.venta_$_efectivo)}</span>
+                        <label>precio venta $ bcv</label>
+                        <div class="product-card-value" style="color: var(--btn-green); font-weight: bold;">${precioVentaDolares}</div>
                     </div>
                     <div class="caja-v-item">
-                        <label>Stock Disponible</label>
-                        <span>${p.cantidad}</span>
+                        <label>venta $ efectivo</label>
+                        <div class="product-card-value" style="color: var(--btn-orange); font-weight: bold;">${formatCurrency(p.venta_$_efectivo)}</div>
+                    </div>
+                    <div class="caja-v-item">
+                        <label>precio venta bs (bcv)</label>
+                        <div class="product-card-value" style="color: var(--text-primary); font-weight: bold;">${precioVentaBsBcv}</div>
                     </div>
                     <div class="caja-v-actions">
                         <label>Cantidad a llevar</label>
