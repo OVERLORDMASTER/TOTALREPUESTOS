@@ -350,10 +350,13 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
 export async function generarInventarioPDF(productosCache = [], tipoFiltro = 'conteo') {
     console.log('Iniciando preparación de PDF de inventario. Tipo:', tipoFiltro);
 
-    // Ambos reportes muestran todos los productos registrados
-    const productosAImprimir = [...productosCache];
-
     const esConteoVacio = (tipoFiltro === 'conteo' || tipoFiltro === 'vacio');
+
+    // Filtrar productos: En modo con stock, omitir los que tienen cantidad 0 o menor
+    const productosAImprimir = esConteoVacio
+        ? [...productosCache]
+        : productosCache.filter(p => (Number(p.cantidad) || 0) > 0);
+
     let tipoTexto = 'INVENTARIO SIN STOCK';
     let headerTitulo = 'LISTA DE INVENTARIO - SIN STOCK';
     let prefijoArchivo = 'inventario_sin_stock';
@@ -365,7 +368,7 @@ export async function generarInventarioPDF(productosCache = [], tipoFiltro = 'co
     }
 
     if (productosAImprimir.length === 0) {
-        showToast('No se encontraron productos en el inventario.', 'info');
+        showToast(esConteoVacio ? 'No se encontraron productos en el inventario.' : 'No hay productos con stock disponible para imprimir.', 'info');
         return;
     }
 

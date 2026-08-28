@@ -354,6 +354,11 @@ async function obtenerTasas() {
         const parEl = document.getElementById('sidebarParallelRate');
         if (bcvEl && oficialRate > 0) bcvEl.textContent = `Bs ${oficialRate.toFixed(2)}`;
         if (parEl && paraleloRate > 0) parEl.textContent = `Bs ${paraleloRate.toFixed(2)}`;
+
+        // Recalcular dinámicamente precios de productos calculados según las tasas vigentes
+        if (oficialRate > 0 || paraleloRate > 0) {
+            recalcularPreciosProductosCache(oficialRate, paraleloRate);
+        }
     }
 }
 
@@ -402,6 +407,7 @@ async function loadProducts() {
 
         // The data will be an array, even if it's empty. No need for a !products check.
         productosCache = products || [];
+        recalcularPreciosProductosCache(oficialRate, paraleloRate);
 
     } catch (err) {
         console.error('Fatal error loading productos from Supabase:', err);
@@ -505,6 +511,82 @@ function calcularPreciosPorcentaje(precioProv, porcDesc, porcGanancia, rateOfici
         costoUsdBcv: Math.round(costoUsdBcv * 100) / 100,
         ventaUsdBcv: Math.round(ventaUsdBcv * 100) / 100
     };
+}
+
+/**
+ * Aplica el recálculo dinámico de precios (Costo $ BCV y Venta $ BCV)
+ * a un producto registrado con la calculadora / fórmula de porcentajes,
+ * utilizando las tasas de cambio vigentes (BCV y Paralelo).
+ */
+function aplicarRecalculoTasasProducto(p, rateOficial = oficialRate, rateParalelo = paraleloRate) {
+    if (!p) return p;
+
+    const tieneModoCalc = (p.modo_creacion === 'calculator' || p.modo_creacion === 'calculadora');
+    const valCalcCosto = parseSafeFloat(p['calc_costo_$_efectivo'], 0);
+    const valCostoEf = parseSafeFloat(p['costo_$_efectivo'], 0);
+    const valGan = parseSafeFloat(p.calc_ganancia, -1);
+
+    const esProductoCalculado = tieneModoCalc || (valCalcCosto > 0) || (valGan >= 0 && valCostoEf > 0);
+
+    if (!esProductoCalculado) return p;
+
+    const precioProv = valCalcCosto > 0 ? valCalcCosto : (valCostoEf > 0 ? valCostoEf : parseSafeFloat(p.precio_costo_dolares_bcv, 0));
+    const porcDesc = parseSafeFloat(p.calc_descuento, 0);
+    const porcGan = parseSafeFloat(p.calc_ganancia, 0);
+
+    if (precioProv > 0) {
+        const calculados = calcularPreciosPorcentaje(precioProv, porcDesc, porcGan, rateOficial, rateParalelo);
+        p.precio_costo_dolares_bcv = calculados.costoUsdBcv;
+        p.precio_venta_dolares_bcv = calculados.ventaUsdBcv;
+        p['costo_$_efectivo'] = calculados.costoEfectivo;
+        p['venta_$_efectivo'] = calculados.ventaEfectivo;
+    }
+
+    return p;
+}
+
+/**
+ * Recalcula todos los productos en el caché según las tasas vigentes
+ * y actualiza las interfaces activas (Inventario y Caja) en tiempo real.
+ */
+function recalcularPreciosProductosCache(rateOficial = oficialRate, rateParalelo = paraleloRate) {
+    if (!Array.isArray(productosCache) || productosCache.length === 0) return;
+
+    productosCache.forEach(p => aplicarRecalculoTasasProducto(p, rateOficial, rateParalelo));
+
+    // Si hay productos cargados en el carrito de caja, sincronizar sus precios recalculados
+    if (Array.isArray(productosParaLlevar) && productosParaLlevar.length > 0) {
+        productosParaLlevar.forEach(item => {
+            if (!item.esAdicional) {
+                const prodRef = productosCache.find(p => p.codigo === item.codigo);
+                if (prodRef) {
+                    item.precio_venta_dolares_bcv = prodRef.precio_venta_dolares_bcv;
+                    item.precio_costo_dolares_bcv = prodRef.precio_costo_dolares_bcv;
+                    item['venta_$_efectivo'] = prodRef['venta_$_efectivo'];
+                    item['costo_$_efectivo'] = prodRef['costo_$_efectivo'];
+                }
+            }
+        });
+    }
+
+    // Refrescar la vista activa en pantalla si es Inventario o Caja
+    const activeNav = document.querySelector('.nav-btn.active');
+    if (activeNav) {
+        const vistaActiva = activeNav.textContent.trim().toLowerCase();
+        if (vistaActiva === 'inventario de productos') {
+            const currentSearch = document.getElementById('productSearch')?.value;
+            if (currentSearch && currentSearch.trim()) {
+                renderProducts(filtrarProductosFuzzy(productosCache, currentSearch));
+            } else {
+                renderProducts(productosCache);
+            }
+        } else if (vistaActiva === 'caja') {
+            const currentCajaSearch = document.getElementById('cajaProductSearch')?.value;
+            const prods = (currentCajaSearch && currentCajaSearch.trim()) ? filtrarProductosFuzzy(productosCache, currentCajaSearch) : productosCache;
+            renderCajaProductos(prods);
+            renderizarParaLlevar();
+        }
+    }
 }
 
 function actualizarResultadosCalculadora() {
@@ -705,6 +787,7 @@ async function initCajaData() {
     const { data } = await _supabase.from('productos').select('*').order('nombre');
     productosCache = data || [];
     if (oficialRate === 0) await obtenerTasas();
+    recalcularPreciosProductosCache(oficialRate, paraleloRate);
 }
 
 function renderCajaProductos(productsToRender) {
@@ -2400,6 +2483,7 @@ async function initVistaDevoluciones() {
             const { data, error } = await _supabase.from('productos').select('*');
             if (error) throw error;
             productosCache = data || [];
+            recalcularPreciosProductosCache(oficialRate, paraleloRate);
         } catch (error) {
             console.error("Error al precargar el caché de productos para devoluciones:", error);
             showToast('No se pudo cargar la lista de productos, la función de devolución puede fallar.', 'error');
