@@ -250,6 +250,19 @@ const socket = (typeof io === 'function') ? io() : { on: () => { }, emit: () => 
 if (typeof socket.on === 'function') {
     socket.on('connect', () => console.log('Conectado a Socket.IO'));
     socket.on('actualizacion-dato', (data) => {
+        if (!data) return;
+
+        // Sincronización global de tasas de cambio en tiempo real
+        if (data.type === 'rates' && data.settings) {
+            tasaSettings = data.settings;
+            localStorage.setItem(TASA_SETTINGS_KEY, JSON.stringify(tasaSettings));
+            console.log('🔄 Tasas globales actualizadas desde otra terminal:', tasaSettings);
+            cargarAjustesTasa();
+            obtenerTasas();
+            showToast('🔔 Tasas de cambio sincronizadas globalmente.', 'info', 2500);
+            return;
+        }
+
         const activeNav = document.querySelector('.nav-btn.active');
         if (!activeNav) return;
         const vistaActiva = activeNav.textContent.trim().toLowerCase();
@@ -320,6 +333,24 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 4000) {
         return res;
     } finally {
         clearTimeout(timer);
+    }
+}
+
+// Cargar configuración global de tasas desde el servidor central
+async function cargarAjustesTasaGlobales() {
+    try {
+        const res = await fetchWithTimeout('/api/tasas', {}, 3000);
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && data.settings) {
+                tasaSettings = data.settings;
+                localStorage.setItem(TASA_SETTINGS_KEY, JSON.stringify(tasaSettings));
+                console.log('✅ Ajustes globales de tasas cargados:', tasaSettings);
+                await obtenerTasas();
+            }
+        }
+    } catch (e) {
+        console.warn('Aviso: Usando ajustes locales de tasa:', e.message);
     }
 }
 
@@ -3211,7 +3242,7 @@ function initVistaAjustes() {
         if (container) container.style.display = this.checked ? 'block' : 'none';
     });
 
-    document.getElementById('guardarAjustesTasa')?.addEventListener('click', () => {
+    document.getElementById('guardarAjustesTasa')?.addEventListener('click', async () => {
         const oficialModoEl = document.getElementById('tasaOficialModo');
         const oficialValEl = document.getElementById('manualOficialRate');
         const paraleloModoEl = document.getElementById('tasaParaleloModo');
@@ -3227,9 +3258,27 @@ function initVistaAjustes() {
                 value: parseFloat(paraleloValEl?.value) || 0
             }
         };
+
         localStorage.setItem(TASA_SETTINGS_KEY, JSON.stringify(newSettings));
         tasaSettings = newSettings;
-        showToast('Ajustes guardados.', 'success');
+
+        // Sincronizar con el servidor para que todas las terminales (PC y teléfonos) lo tengan
+        try {
+            await fetch('/api/tasas', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newSettings)
+            });
+        } catch (e) {
+            console.warn('No se pudo enviar tasas al backend:', e.message);
+        }
+
+        // Emitir evento por WebSockets para actualización instantánea
+        if (typeof socket.emit === 'function') {
+            socket.emit('cambio-dato', { type: 'rates', settings: newSettings });
+        }
+
+        showToast('Ajustes guardados y sincronizados globalmente.', 'success');
         obtenerTasas(); // Actualizar tasas inmediatamente
     });
 
@@ -4564,7 +4613,7 @@ document.addEventListener('DOMContentLoaded', () => {
         deferredInstallPrompt = null;
     });
 
-    obtenerTasas();
+    cargarAjustesTasaGlobales();
     setInterval(obtenerTasas, 300000); // Actualizar cada 5 minutos
 
     // Cargar la vista de inicio por defecto

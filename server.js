@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const http = require('http');
+const fs = require('fs');
 require('dotenv').config(); // Cargar variables de entorno
 const { Server } = require("socket.io");
 const fetch = require('node-fetch');
@@ -26,6 +27,22 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3000;
 const ROOT_DIR = __dirname;
+const TASA_FILE = path.join(ROOT_DIR, 'tasa_settings.json');
+
+// Estado global de configuración de tasas en el servidor
+let serverTasaSettings = {
+    oficial: { mode: 'automatico', value: 0 },
+    paralelo: { mode: 'automatico', value: 0 }
+};
+
+try {
+    if (fs.existsSync(TASA_FILE)) {
+        const raw = fs.readFileSync(TASA_FILE, 'utf8');
+        serverTasaSettings = JSON.parse(raw);
+    }
+} catch (e) {
+    console.warn('Aviso: No se pudo leer tasa_settings.json al iniciar:', e.message);
+}
 
 // URL del worker de autenticación, obtenida de las variables de entorno para despliegue
 const WORKER_URL = process.env.WORKER_URL || 'https://total-repuestos.benjaminandresperaza.workers.dev/';
@@ -60,6 +77,42 @@ app.get('/api/version', (req, res) => {
     });
 });
 
+// Endpoint global para obtener la configuración de tasas
+app.get('/api/tasas', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.json({ success: true, settings: serverTasaSettings });
+});
+
+// Endpoint global para actualizar la configuración de tasas desde cualquier terminal
+app.post('/api/tasas', (req, res) => {
+    const { oficial, paralelo } = req.body || {};
+    if (oficial && paralelo) {
+        serverTasaSettings = {
+            oficial: {
+                mode: oficial.mode === 'manual' ? 'manual' : 'automatico',
+                value: parseFloat(oficial.value) || 0
+            },
+            paralelo: {
+                mode: paralelo.mode === 'manual' ? 'manual' : 'automatico',
+                value: parseFloat(paralelo.value) || 0
+            }
+        };
+
+        try {
+            fs.writeFileSync(TASA_FILE, JSON.stringify(serverTasaSettings, null, 2), 'utf8');
+        } catch (e) {
+            console.warn('Error al guardar tasa_settings.json:', e.message);
+        }
+
+        // Emitir a todos los clientes conectados en tiempo real
+        io.emit('actualizacion-dato', { type: 'rates', settings: serverTasaSettings });
+        console.log('📡 Tasas globales actualizadas y sincronizadas:', serverTasaSettings);
+
+        return res.json({ success: true, settings: serverTasaSettings });
+    }
+    res.status(400).json({ success: false, message: 'Datos de tasas incompletos.' });
+});
+
 // API REST - Proxy de Autenticación
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
@@ -87,8 +140,19 @@ app.post('/api/login', async (req, res) => {
 io.on('connection', (socket) => {
     console.log('Un cliente se ha conectado vía WebSocket');
 
-    // Escucha un evento de ejemplo 'cambio-dato' desde un cliente
+    // Enviar configuración de tasas actual al conectar
+    if (serverTasaSettings) {
+        socket.emit('actualizacion-dato', { type: 'rates', settings: serverTasaSettings });
+    }
+
+    // Escucha eventos desde un cliente
     socket.on('cambio-dato', (data) => {
+        if (data && data.type === 'rates' && data.settings) {
+            serverTasaSettings = data.settings;
+            try {
+                fs.writeFileSync(TASA_FILE, JSON.stringify(serverTasaSettings, null, 2), 'utf8');
+            } catch (e) {}
+        }
         // Reenvía la información a todos los demás clientes conectados (excepto al emisor)
         socket.broadcast.emit('actualizacion-dato', data);
         console.log('Dato recibido y retransmitido a otros clientes:', data);

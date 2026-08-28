@@ -351,24 +351,43 @@ export async function generarInventarioPDF(productosCache = [], tipoFiltro = 'co
     console.log('Iniciando preparación de PDF de inventario. Tipo:', tipoFiltro);
 
     const esConteoVacio = (tipoFiltro === 'conteo' || tipoFiltro === 'vacio');
+    const esSoloStockCero = (tipoFiltro === 'cero' || tipoFiltro === 'stock_cero' || tipoFiltro === 'agotados');
 
-    // Filtrar productos: En modo con stock, omitir los que tienen cantidad 0 o menor
-    const productosAImprimir = esConteoVacio
-        ? [...productosCache]
-        : productosCache.filter(p => (Number(p.cantidad) || 0) > 0);
+    // Filtrar productos según el tipo de reporte solicitado:
+    let productosAImprimir = [];
+    if (esConteoVacio) {
+        // Inventario sin stock (conteo físico): todos los productos registrados
+        productosAImprimir = [...productosCache];
+    } else if (esSoloStockCero) {
+        // Inventario stock 0: únicamente productos agotados con cantidad 0
+        productosAImprimir = productosCache.filter(p => (Number(p.cantidad) || 0) === 0);
+    } else {
+        // Inventario con stock: productos con stock disponible (cantidad >= 1)
+        productosAImprimir = productosCache.filter(p => (Number(p.cantidad) || 0) > 0);
+    }
 
     let tipoTexto = 'INVENTARIO SIN STOCK';
     let headerTitulo = 'LISTA DE INVENTARIO - SIN STOCK';
     let prefijoArchivo = 'inventario_sin_stock';
 
-    if (!esConteoVacio) {
+    if (esSoloStockCero) {
+        tipoTexto = 'INVENTARIO STOCK 0';
+        headerTitulo = 'LISTA DE INVENTARIO - STOCK 0';
+        prefijoArchivo = 'inventario_stock_0';
+    } else if (!esConteoVacio) {
         tipoTexto = 'INVENTARIO CON STOCK';
         headerTitulo = 'LISTA DE INVENTARIO - CON STOCK';
         prefijoArchivo = 'inventario_con_stock';
     }
 
     if (productosAImprimir.length === 0) {
-        showToast(esConteoVacio ? 'No se encontraron productos en el inventario.' : 'No hay productos con stock disponible para imprimir.', 'info');
+        let msg = 'No se encontraron productos en el inventario.';
+        if (esSoloStockCero) {
+            msg = 'No hay productos con stock en 0 para imprimir.';
+        } else if (!esConteoVacio) {
+            msg = 'No hay productos con stock disponible para imprimir.';
+        }
+        showToast(msg, 'info');
         return;
     }
 
