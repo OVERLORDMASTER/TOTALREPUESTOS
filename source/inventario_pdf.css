@@ -106,15 +106,25 @@ body {
 
 table {
     width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
     font-size: 12px;
 }
+
+col.col-codigo, th.col-codigo, td.col-codigo { width: 14%; }
+col.col-producto, th.col-producto, td.col-producto { width: 38%; }
+col.col-cantidad, th.col-cantidad, td.col-cantidad { width: 12%; }
+col.col-costo, th.col-costo, td.col-costo { width: 12%; }
+col.col-venta, th.col-venta, td.col-venta { width: 12%; }
+col.col-verificado, th.col-verificado, td.col-verificado { width: 12%; }
 
 th, td {
     border: 1px solid var(--table-border);
     padding: 8px 6px;
     text-align: center;
     vertical-align: middle;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 th {
@@ -129,6 +139,8 @@ th {
 td div {
     font-size: 12px;
     color: #000;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 td div.text-left {
@@ -203,6 +215,7 @@ td div.text-left {
 
     table {
         width: 100% !important;
+        table-layout: fixed !important;
         border-collapse: collapse !important;
         page-break-inside: auto;
         break-inside: auto;

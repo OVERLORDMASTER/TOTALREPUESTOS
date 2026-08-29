@@ -501,12 +501,12 @@ export async function generarInventarioPDF(productosCache = [], tipoFiltro = 'co
                 : `<span style="font-weight: 700;">${formatInteger(item.cantidad)}</span>`;
 
             row.innerHTML = `
-                <td><div>${item.codigo || ''}</div></td>
-                <td><div class="text-left">${item.nombre || ''}</div></td>
-                <td><div>${cantidadHtml}</div></td>
-                <td><div style="font-weight: 600; color: #1e293b;">${costoFormatted}</div></td>
-                <td><div style="font-weight: 700; color: #16a34a;">${ventaFormatted}</div></td>
-                <td class="checkbox-cell"><span class="checkbox-box"></span></td>
+                <td class="col-codigo"><div>${item.codigo || ''}</div></td>
+                <td class="col-producto"><div class="text-left">${item.nombre || ''}</div></td>
+                <td class="col-cantidad"><div>${cantidadHtml}</div></td>
+                <td class="col-costo"><div style="font-weight: 600; color: #1e293b;">${costoFormatted}</div></td>
+                <td class="col-venta"><div style="font-weight: 700; color: #16a34a;">${ventaFormatted}</div></td>
+                <td class="col-verificado checkbox-cell"><span class="checkbox-box"></span></td>
             `;
             categoryTbody.appendChild(row);
         });
