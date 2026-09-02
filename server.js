@@ -113,6 +113,50 @@ app.post('/api/tasas', (req, res) => {
     res.status(400).json({ success: false, message: 'Datos de tasas incompletos.' });
 });
 
+// Endpoint para obtener la configuración de licencia
+app.get('/api/license', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    const LICENSE_FILE = path.join(ROOT_DIR, 'license_config.json');
+    let config = {
+        username: 'total-repuestos',
+        password: 'hdf378nr',
+        license_key: 'OMG-7J66-BT4Q-6LWQ-GQPX-CN5L-9QAZ',
+        app_name: 'WEBSITE'
+    };
+    try {
+        if (fs.existsSync(LICENSE_FILE)) {
+            const raw = fs.readFileSync(LICENSE_FILE, 'utf8');
+            config = JSON.parse(raw);
+        }
+    } catch (e) {
+        console.warn('Aviso: No se pudo leer license_config.json:', e.message);
+    }
+    res.json({ success: true, config });
+});
+
+// Endpoint para actualizar la configuración de licencia
+app.post('/api/license', (req, res) => {
+    const { username, password, license_key, app_name } = req.body || {};
+    if (!username || !license_key) {
+        return res.status(400).json({ success: false, message: 'Datos de licencia incompletos.' });
+    }
+    const config = {
+        username: username.trim(),
+        password: (password || '').trim(),
+        license_key: license_key.trim(),
+        app_name: (app_name || 'WEBSITE').trim()
+    };
+    const LICENSE_FILE = path.join(ROOT_DIR, 'license_config.json');
+    try {
+        fs.writeFileSync(LICENSE_FILE, JSON.stringify(config, null, 2), 'utf8');
+        console.log('🔐 Configuración de licencia actualizada:', config);
+        return res.json({ success: true, config });
+    } catch (e) {
+        console.error('Error al guardar license_config.json:', e);
+        return res.status(500).json({ success: false, message: 'No se pudo guardar la configuración de licencia.' });
+    }
+});
+
 // API REST - Proxy de Autenticación
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;

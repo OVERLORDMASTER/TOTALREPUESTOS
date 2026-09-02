@@ -64,7 +64,9 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     }
     const metodosEnEfectivo = ['Binance', 'Dólares en efectivo', 'Zelle'];
     const pagoEnEfectivo = Array.isArray(pagos) && pagos.some(p => metodosEnEfectivo.includes(p.metodo));
-    const templateFileName = pagoEnEfectivo ? 'factura_USD.html' : 'factura.html';
+    const esCreditoODebe = (venta.estado_pago === 'pendiente');
+    const usarPlantillaDolares = pagoEnEfectivo || esCreditoODebe;
+    const templateFileName = usarPlantillaDolares ? 'factura_usd.html' : 'factura.html';
 
     const [htmlResponse, cssResponse] = await Promise.all([
         fetch(`source/${templateFileName}`),
@@ -258,20 +260,40 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
         return nombre !== '' || codigo !== '' || cantidad > 0 || precio > 0;
     });
 
+    let totalCalculadoDolares = 0;
+
     detallesValidos.forEach(item => {
         const qty = Number(item.cantidad) || 0;
-        const precioUnitarioStored = Number(item.precio_unitario) || 0; // This now holds the correct price (BCV or Efectivo)
-        const producto = productosCache.find(p => p.codigo === (item.producto_codigo || '')) || (item.producto_codigo ? productosCache.find(p => p.codigo && p.codigo.startsWith(item.producto_codigo)) : null); // Still useful for brand
-        const marca = producto ? (producto.marca || 'N/A') : 'N/A'; // Brand is not stored in detalle_ventas
+        const precioUnitarioStored = Number(item.precio_unitario) || 0; // Contiene el precio guardado
+        const producto = productosCache.find(p => p.codigo === (item.producto_codigo || '')) || (item.producto_codigo ? productosCache.find(p => p.codigo && p.codigo.startsWith(item.producto_codigo)) : null);
+        const marca = producto ? (producto.marca || 'N/A') : 'N/A';
 
         let precioUnitarioDisplay, subtotalDisplay;
 
-        if (pagoEnEfectivo) {
-            // If paid in cash, item.precio_unitario already holds the cash price.
+        if (esCreditoODebe) {
+            // Para ventas a crédito / clientes que DEBEN: se factura en Dólares a precio de venta BCV
+            let precioVentaBcv = 0;
+            if (producto && producto.precio_venta_dolares_bcv !== undefined && producto.precio_venta_dolares_bcv !== null) {
+                precioVentaBcv = parseFloat(producto.precio_venta_dolares_bcv) || 0;
+            }
+            if (precioVentaBcv <= 0) {
+                precioVentaBcv = precioUnitarioStored;
+            }
+
+            const subtotalDolar = qty * precioVentaBcv;
+            totalCalculadoDolares += subtotalDolar;
+
+            precioUnitarioDisplay = formatCurrency(precioVentaBcv);
+            subtotalDisplay = formatCurrency(subtotalDolar);
+        } else if (pagoEnEfectivo) {
+            // Si el pago fue en efectivo/divisas
+            const subtotalDolar = qty * precioUnitarioStored;
+            totalCalculadoDolares += subtotalDolar;
+
             precioUnitarioDisplay = formatCurrency(precioUnitarioStored);
-            subtotalDisplay = formatCurrency(qty * precioUnitarioStored);
+            subtotalDisplay = formatCurrency(subtotalDolar);
         } else {
-            // Si el pago fue en bolívares, mostrar montos en bolívares
+            // Si el pago fue en bolívares (BCV pagado)
             precioUnitarioDisplay = formatCurrency(precioUnitarioStored * saleRate);
             subtotalDisplay = formatCurrency(qty * precioUnitarioStored * saleRate);
         }
@@ -295,11 +317,14 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
     doc.body.appendChild(footerCover);
 
     // Establecer el valor total correcto (USD o BS)
-    if (pagoEnEfectivo) {
-        // Para la plantilla de USD, solo llenamos el total en USD
-        doc.querySelector('#totalUSD')?.setAttribute('value', formatCurrency(parseFloat(venta.total_usd)));
+    if (usarPlantillaDolares) {
+        // Para la plantilla de USD (Efectivo o Crédito / DEBE)
+        const totalFinalUsd = (esCreditoODebe && totalCalculadoDolares > 0)
+            ? totalCalculadoDolares
+            : (parseFloat(venta.total_usd) || totalCalculadoDolares);
+        doc.querySelector('#totalUSD')?.setAttribute('value', formatCurrency(totalFinalUsd));
     } else {
-        // Para la plantilla de BCV, llenamos ambos totales
+        // Para la plantilla de BCV en Bolívares
         doc.querySelector('#totalUSD')?.setAttribute('value', formatCurrency(parseFloat(venta.total_usd)));
         doc.querySelector('#totalBS')?.setAttribute('value', formatCurrency(parseFloat(venta.total_bs)));
     }

@@ -1,10 +1,22 @@
 import { generarFacturaPDF, generarInventarioPDF } from './source/generatepdf.js';
 import { showToast, showConfirmation, formatCurrency, formatInteger, filtrarProductosFuzzy } from './utils.js';
+import { initLicenseManager } from './license.js';
 
-// Conexión a Supabase
+// Conexión a Supabase Principal (Inventario, Ventas, Clientes, Facturación)
 const SUPABASE_URL = 'https://tqlbmcqkottvclikpxur.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Gq9mJ5Qo9MIa-k0pRTB7hQ_Rda5qtBX';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Conexión a Supabase Secundaria (Administración de Mensualidades, Membresías y Licencias)
+const SUPABASE_ADMIN_URL = 'https://lzqdhdvkwiinocmrrwjn.supabase.co';
+const SUPABASE_ADMIN_ANON_KEY = 'sb_publishable_BoRLHezGfOx1q-JBGty8WQ_NzNm01Gv';
+const _supabaseAdmin = supabase.createClient(SUPABASE_ADMIN_URL, SUPABASE_ADMIN_ANON_KEY);
+
+// Exportar/asignar al objeto global para fácil acceso si se requiere
+window._supabaseAdmin = _supabaseAdmin;
+
+// Inicializar el Sistema de Control de Licencias OMEGASYNC
+initLicenseManager();
 
 // --- INICIO: Lógica para autocompletar y formato de datos del cliente ---
 const inputCedula = document.getElementById('cliCedula');
@@ -385,6 +397,8 @@ async function obtenerTasas() {
         const parEl = document.getElementById('sidebarParallelRate');
         if (bcvEl && oficialRate > 0) bcvEl.textContent = `Bs ${oficialRate.toFixed(2)}`;
         if (parEl && paraleloRate > 0) parEl.textContent = `Bs ${paraleloRate.toFixed(2)}`;
+        window.oficialRate = oficialRate;
+        window.paraleloRate = paraleloRate;
 
         // Recalcular dinámicamente precios de productos calculados según las tasas vigentes
         if (oficialRate > 0 || paraleloRate > 0) {
@@ -3924,7 +3938,7 @@ document.getElementById('formDatosCliente')?.addEventListener('submit', async (e
             return;
         }
 
-        const totalUsd = totalDeVentaApplicable; // Usar el total aplicable (BCV o Efectivo)
+        const totalUsd = pagoPendiente ? totalVentaActual : totalDeVentaApplicable; // Para créditos siempre se usa el total en dólares BCV
         const totalBs = totalUsd * currentRate; // El total en BS se basa en la tasa aplicable
 
         const ventaInsertData = { cliente_nombre: nombre, cliente_cedula: cedulaCompleta, cliente_telefono: telefono, cliente_direccion: direccion, tipo_pago: tipoPago, total_usd: totalUsd, total_bs: totalBs, estado_pago: pagoPendiente ? 'pendiente' : 'pagado' };
@@ -3940,7 +3954,7 @@ document.getElementById('formDatosCliente')?.addEventListener('submit', async (e
             ventaId = ventaData.id;
 
             for (const item of productosParaLlevar) {
-                const priceToStoreInDetails = useEfectivoTotal ? (item.venta_$_efectivo || 0) : (item.precio_venta_dolares_bcv || 0);
+                const priceToStoreInDetails = pagoPendiente ? (item.precio_venta_dolares_bcv || 0) : (useEfectivoTotal ? (item.venta_$_efectivo || 0) : (item.precio_venta_dolares_bcv || 0));
                 const codigoLimpio = String(item.codigo || '').slice(0, 20);
 
                 const { error: detalleError } = await _supabase.from('detalle_ventas').insert([{
@@ -3949,7 +3963,7 @@ document.getElementById('formDatosCliente')?.addEventListener('submit', async (e
                     producto_nombre: item.nombre,
                     cantidad: item.cantidadLlevar,
                     precio_unitario: priceToStoreInDetails,
-                    tipo_precio_usado: String(useEfectivoTotal ? 'EFECTIVO' : 'BCV').slice(0, 20)
+                    tipo_precio_usado: String(pagoPendiente ? 'BCV' : (useEfectivoTotal ? 'EFECTIVO' : 'BCV')).slice(0, 20)
                 }]);
                 if (detalleError) throw detalleError;
                 if (!item.esAdicional) {
@@ -3971,11 +3985,12 @@ document.getElementById('formDatosCliente')?.addEventListener('submit', async (e
             if (emitirFactura) {
                 const ventaCompleta = {
                     ...ventaData,
+                    estado_pago: pagoPendiente ? 'pendiente' : 'pagado',
                     detalles: productosParaLlevar.map(item => ({
                         producto_codigo: item.codigo,
                         producto_nombre: item.nombre,
                         cantidad: item.cantidadLlevar,
-                        precio_unitario: useEfectivoTotal ? (item.venta_$_efectivo || 0) : (item.precio_venta_dolares_bcv || 0)
+                        precio_unitario: pagoPendiente ? (item.precio_venta_dolares_bcv || 0) : (useEfectivoTotal ? (item.venta_$_efectivo || 0) : (item.precio_venta_dolares_bcv || 0))
                     }))
                 };
                 await generarFacturaPDF(ventaCompleta, currentRate, productosCache);

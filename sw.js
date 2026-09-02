@@ -1,4 +1,4 @@
-const CACHE_NAME = 'omegapos-pwa-v3.8';
+const CACHE_NAME = 'omegapos-pwa-v4.2';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -6,6 +6,7 @@ const STATIC_ASSETS = [
     '/style.css',
     '/manifest.json',
     '/app.js',
+    '/license.js',
     '/utils.js',
     '/generatepdf.js',
     '/source/generatepdf.js',

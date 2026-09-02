@@ -664,6 +664,77 @@
         </div>
     </div>
 
+    <!-- BANNER DE AVISO DE VENCIMIENTO DE LICENCIA -->
+    <div id="licenseWarningBanner" class="license-warning-banner" style="display: none;">
+        <div class="license-warning-content">
+            <div class="license-warning-left">
+                <span class="license-warning-icon">⚠️</span>
+                <span id="licenseWarningText" class="license-warning-text">Aviso de Pago: Su licencia vence pronto. Renueve a tiempo para evitar cortes.</span>
+            </div>
+            <div class="license-warning-right">
+                <a id="licenseWarningWhatsappBtn" href="#" target="_blank" class="license-warning-btn">
+                    <img src="/imagen/what.png" alt="WhatsApp" onerror="this.style.display='none';">
+                    <span>Renovar por WhatsApp</span>
+                </a>
+                <button type="button" id="btnDismissWarningBanner" class="license-warning-close-btn" title="Cerrar aviso temporalmente">&times;</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANTALLA DE BLOQUEO DE LICENCIA (SERVICIO SUSPENDIDO / VENCIDO) -->
+    <div id="licenseLockOverlay" class="license-lock-overlay" style="display: none;">
+        <div class="license-lock-card">
+            <div class="license-lock-icon-wrapper">
+                <span id="licenseLockIcon" class="license-lock-icon">🔒</span>
+            </div>
+            <h2 id="licenseLockTitle" class="license-lock-title">SERVICIO SUSPENDIDO</h2>
+            <p id="licenseLockSubtitle" class="license-lock-subtitle">
+                El ciclo de la licencia ha finalizado o ha sido desactivado por falta de pago.
+            </p>
+
+            <div id="licenseFeeBox" class="license-fee-box">
+                <div class="license-fee-label">
+                    <span>📋</span> Monto a Cancelar:
+                </div>
+                <div class="license-fee-values">
+                    <div id="licenseFeeAmount" class="license-fee-amount">$0.00 USD</div>
+                    <div id="licenseFeeAmountBs" class="license-fee-amount-bs">Bs 0,00 (BCV)</div>
+                </div>
+            </div>
+
+            <div class="license-details-box">
+                <div class="license-detail-row">
+                    <span class="detail-label">Comercio / Usuario:</span>
+                    <span id="lockUsername" class="detail-value">total-repuestos</span>
+                </div>
+                <hr class="license-detail-divider">
+                <div class="license-detail-row">
+                    <span class="detail-label">Fecha de Vencimiento:</span>
+                    <span id="lockExpirationDate" class="detail-value">--/--/----</span>
+                </div>
+                <hr class="license-detail-divider">
+                <div class="license-detail-row">
+                    <span class="detail-label">Estado en Servidor:</span>
+                    <span id="lockServerStatus" class="detail-value status-error">Inhabilitado</span>
+                </div>
+            </div>
+
+            <p class="license-lock-instructions">
+                Para reactivar el sistema, cancele la mensualidad y reporte el pago vía WhatsApp adjuntando el capture del comprobante.
+            </p>
+
+            <a id="btnLockWhatsApp" href="#" target="_blank" class="btn-lock-action btn-lock-whatsapp">
+                <img src="/imagen/what.png" alt="WhatsApp" onerror="this.style.display='none';">
+                <span>Reportar Pago por WhatsApp</span>
+            </a>
+
+            <button type="button" id="btnLockRecheck" class="btn-lock-action btn-lock-recheck">
+                <span id="recheckSpinner" class="recheck-spinner" style="display: none;">🔄</span>
+                <span id="recheckBtnText">Verificar Reactivación (En Línea)</span>
+            </button>
+        </div>
+    </div>
+
     <div id="toastContainer"></div>
 
     <script type="module" src="app.js" defer></script>
