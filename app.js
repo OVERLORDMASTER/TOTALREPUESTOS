@@ -585,10 +585,14 @@ function renderProducts(productsToRender) {
         totalInvertidoEfectivo += cant * costoEf;
         stockTotal += cant;
     });
+    const totalInvertidoBs = totalInvertidoBcv * oficialRate;
+
     const totalInvEl = document.getElementById('totalInvertido');
     if (totalInvEl) totalInvEl.textContent = `$ ${formatCurrency(totalInvertidoBcv)}`;
     const totalInvEfEl = document.getElementById('totalInvertidoEfectivo');
     if (totalInvEfEl) totalInvEfEl.textContent = `$ ${formatCurrency(totalInvertidoEfectivo)}`;
+    const totalInvBsEl = document.getElementById('totalInvertidoBs');
+    if (totalInvBsEl) totalInvBsEl.textContent = `Bs ${formatCurrency(totalInvertidoBs)}`;
     const stockTotEl = document.getElementById('stockTotal');
     if (stockTotEl) stockTotEl.textContent = formatInteger(stockTotal);
 }
