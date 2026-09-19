@@ -144,13 +144,15 @@ export async function generarFacturaPDF(venta, paraleloRate, productosCache = []
                 return `<span class="payment-method-badge">${p.metodo}${displayMonto ? ': ' + displayMonto : ''}</span>`;
             }).join('');
             paymentMethodsHtml = `<div class="payment-methods-list" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px;">${paymentMethodsHtml}</div>`;
+        } else if (esCreditoODebe) {
+            paymentMethodsHtml = `<span class="payment-method-badge" style="color: #ea580c; font-weight: bold;">Crédito Pendiente</span>`;
         } else {
             // Fallback para formato antiguo (string simple)
-            paymentMethodsHtml = `<span class="payment-method-badge">${venta.tipo_pago || 'N/A'}</span>`;
+            paymentMethodsHtml = `<span class="payment-method-badge">${(venta.tipo_pago && venta.tipo_pago !== '[]') ? venta.tipo_pago : 'Crédito Pendiente'}</span>`;
         }
     } catch (e) {
         // Si JSON.parse falla, es probable que sea el formato antiguo
-        paymentMethodsHtml = `<span class="payment-method-badge">${venta.tipo_pago || 'N/A'}</span>`;
+        paymentMethodsHtml = `<span class="payment-method-badge">${(venta.tipo_pago && venta.tipo_pago !== '[]') ? venta.tipo_pago : 'Crédito Pendiente'}</span>`;
     }
     if (tipoPagoContainer) {
         tipoPagoContainer.innerHTML = `<label style="white-space: nowrap; margin-right: 8px;">MÉTODOS DE PAGO :</label>${paymentMethodsHtml}`;
