@@ -261,6 +261,30 @@ navButtons.forEach(btn => {
     });
 });
 
+// --- CONTROL DE FOOTER COLAPSABLE EN MÓVILES ---
+document.addEventListener('click', (e) => {
+    const toggleBtn = e.target.closest('.footer-toggle-btn');
+    if (toggleBtn) {
+        e.preventDefault();
+        const footer = toggleBtn.closest('.collapsible-footer');
+        if (footer) {
+            const isExpanded = footer.classList.toggle('expanded');
+            toggleBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+        }
+        return;
+    }
+
+    // Si el usuario toca dentro del área de contenido en móvil y el footer está abierto, cerrarlo suavemente
+    if (window.innerWidth <= 1024 && e.target.closest('.content-area')) {
+        const expandedFooters = document.querySelectorAll('.collapsible-footer.expanded');
+        expandedFooters.forEach(f => {
+            f.classList.remove('expanded');
+            const btn = f.querySelector('.footer-toggle-btn');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+        });
+    }
+});
+
 // --- LÓGICA DE LA APLICACIÓN (COPIADA Y ADAPTADA) ---
 
 // Conexión a Socket.io protegida contra fallos
@@ -595,6 +619,8 @@ function renderProducts(productsToRender) {
     if (totalInvBsEl) totalInvBsEl.textContent = `Bs ${formatCurrency(totalInvertidoBs)}`;
     const stockTotEl = document.getElementById('stockTotal');
     if (stockTotEl) stockTotEl.textContent = formatInteger(stockTotal);
+    const stockBadgeEl = document.getElementById('footerStockBadge');
+    if (stockBadgeEl) stockBadgeEl.textContent = `Stock: ${formatInteger(stockTotal)}`;
 }
  
 function parseSafeFloat(val, defaultVal = 0) {
@@ -1255,6 +1281,8 @@ function renderizarTablaVentas(listaVentas) {
         if (countEl) countEl.textContent = '0';
         const usdEl = document.getElementById('totalVentasUsd');
         if (usdEl) usdEl.textContent = '$ 0.00';
+        const ventasBadgeEl = document.getElementById('footerVentasBadge');
+        if (ventasBadgeEl) ventasBadgeEl.textContent = 'Total: $ 0.00';
         return;
     }
 
@@ -1482,6 +1510,8 @@ function renderizarTablaVentas(listaVentas) {
     if (countEl) countEl.textContent = formatInteger(listaVentas.length);
     const totalUsdEl = document.getElementById('totalVentasUsd');
     if (totalUsdEl) totalUsdEl.textContent = `$ ${formatCurrency(sumaTotalUsd)}`;
+    const ventasBadgeEl = document.getElementById('footerVentasBadge');
+    if (ventasBadgeEl) ventasBadgeEl.textContent = `Total: $ ${formatCurrency(sumaTotalUsd)}`;
 }
 
 async function _deleteSaleAndRestoreStock(ventaParaEliminar) {

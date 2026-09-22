@@ -26,9 +26,20 @@
 <div class="content-area">
     <div id="productsContainer"></div>
 </div>
-<footer>
-    <div class="total-item"><span class="total-label">total invertido $ (bcv):</span><span class="total-value" id="totalInvertido" style="color: var(--btn-green);">$ 0.00</span></div>
-    <div class="total-item"><span class="total-label">total invertido $ (efectivo):</span><span class="total-value" id="totalInvertidoEfectivo" style="color: var(--btn-orange);">$ 0.00</span></div>
-    <div class="total-item"><span class="total-label">total invertido bs (bcv):</span><span class="total-value" id="totalInvertidoBs" style="color: var(--text-primary);">Bs 0.00</span></div>
-    <div class="total-item"><span class="total-label">stock total:</span><span class="total-value" id="stockTotal">0</span></div>
+<footer class="collapsible-footer" id="inventarioFooter">
+    <button type="button" class="footer-toggle-btn" id="btnToggleFooter" aria-expanded="false" aria-label="Ver u ocultar totales">
+        <div class="footer-toggle-left">
+            <span class="footer-toggle-icon">▲</span>
+            <span class="footer-toggle-text">Totales de Inversión</span>
+        </div>
+        <div class="footer-toggle-right">
+            <span class="footer-toggle-badge" id="footerStockBadge">Stock: 0</span>
+        </div>
+    </button>
+    <div class="footer-content" id="footerContent">
+        <div class="total-item"><span class="total-label">total invertido $ (bcv):</span><span class="total-value" id="totalInvertido" style="color: var(--btn-green);">$ 0.00</span></div>
+        <div class="total-item"><span class="total-label">total invertido $ (efectivo):</span><span class="total-value" id="totalInvertidoEfectivo" style="color: var(--btn-orange);">$ 0.00</span></div>
+        <div class="total-item"><span class="total-label">total invertido bs (bcv):</span><span class="total-value" id="totalInvertidoBs" style="color: var(--text-primary);">Bs 0.00</span></div>
+        <div class="total-item"><span class="total-label">stock total:</span><span class="total-value" id="stockTotal">0</span></div>
+    </div>
 </footer>

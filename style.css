@@ -2204,20 +2204,194 @@ header {
 }
 
 /* ==========================================================================
-   7. FOOTER DE TOTALES
+   7. FOOTER DE TOTALES (ESCRITORIO & GENERAL)
    ========================================================================== */
-footer { 
+footer,
+.collapsible-footer { 
     background-color: var(--bg-card); 
     border-top: 1px solid var(--border-color); 
     padding: 12px 20px; 
     display: flex; 
-    gap: 30px; 
+    flex-wrap: wrap;
+    gap: 12px 24px; 
     align-items: center; 
+    width: 100%;
+    box-sizing: border-box;
 }
 
-.total-item { display: flex; gap: 8px; align-items: center; font-size: 0.9rem; }
+.footer-content {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 24px;
+    align-items: center;
+    width: 100%;
+}
+
+.footer-toggle-btn {
+    display: none; /* Oculto completamente en computadoras de escritorio */
+}
+
+.total-item { display: flex; gap: 8px; align-items: center; font-size: 0.9rem; flex-wrap: wrap; }
 .total-label { color: var(--text-muted); text-transform: lowercase; }
 .total-value { font-weight: bold; color: var(--text-primary); font-size: 1.05rem; }
+
+/* ==========================================================================
+   FOOTER COLAPSABLE EN MÓVILES (TABLETS Y TELÉFONOS <= 1024px)
+   ========================================================================== */
+@media (max-width: 1024px) {
+    footer.collapsible-footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 95;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        background: rgba(18, 18, 18, 0.96);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+        border-top-left-radius: 14px;
+        border-top-right-radius: 14px;
+        box-shadow: 0 -4px 22px rgba(0, 0, 0, 0.45);
+        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    [data-theme="light"] footer.collapsible-footer {
+        background: rgba(255, 255, 255, 0.96);
+        border-top: 1px solid rgba(0, 0, 0, 0.12);
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.12);
+    }
+
+    /* Botón de barra/toggle visible solo en móviles */
+    .footer-toggle-btn {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        min-height: 42px;
+        padding: 8px 14px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        color: var(--text-primary);
+        font-family: inherit;
+        outline: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        transition: background-color 0.15s ease;
+    }
+
+    .footer-toggle-btn:active {
+        background-color: var(--bg-hover);
+    }
+
+    .footer-toggle-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .footer-toggle-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--btn-blue);
+        font-size: 0.7rem;
+        font-weight: bold;
+        transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, color 0.2s ease;
+    }
+
+    .footer-toggle-text {
+        font-size: 0.82rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--text-primary);
+        transition: color 0.2s ease;
+    }
+
+    .footer-toggle-badge {
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 10px;
+        background: rgba(59, 130, 246, 0.16);
+        color: var(--btn-blue);
+        border: 1px solid rgba(59, 130, 246, 0.25);
+    }
+
+    /* Contenido de totales colapsable */
+    .footer-content {
+        max-height: 0;
+        opacity: 0;
+        overflow: hidden;
+        padding: 0 12px;
+        transition: max-height 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease, padding 0.25s ease;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        pointer-events: none;
+    }
+
+    /* ESTADO EXPANDIDO / ABIERTO */
+    footer.collapsible-footer.expanded .footer-content {
+        max-height: 280px;
+        opacity: 1;
+        padding: 4px 12px 14px 12px;
+        pointer-events: auto;
+    }
+
+    footer.collapsible-footer.expanded .footer-toggle-icon {
+        transform: rotate(180deg);
+        background: var(--btn-blue);
+        color: #ffffff;
+    }
+
+    footer.collapsible-footer.expanded .footer-toggle-text {
+        color: var(--btn-blue);
+    }
+
+    /* Tarjetas de métricas en el grid 2x2 */
+    footer.collapsible-footer .total-item {
+        background-color: var(--bg-main);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 8px 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
+        box-sizing: border-box;
+    }
+
+    footer.collapsible-footer .total-label {
+        font-size: 0.68rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        font-weight: 600;
+        line-height: 1.1;
+    }
+
+    footer.collapsible-footer .total-value {
+        font-size: 0.92rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    /* Espacio inferior en el área de contenido para que la barra colapsada nunca tape los productos */
+    .content-area {
+        padding-bottom: calc(56px + env(safe-area-inset-bottom)) !important;
+    }
+}
 
 /* ==========================================================================
    8. LOGIN
@@ -2829,21 +3003,7 @@ input:checked + .slider:before { transform: translateX(22px); }
     .summary-value { font-size: 1rem; }
 }
 
-/* ==========================================================================
-   7. FOOTER DE TOTALES
-   ========================================================================== */
-footer { 
-    background-color: var(--bg-card); 
-    border-top: 1px solid var(--border-color); 
-    padding: 12px 20px; 
-    display: flex; 
-    gap: 30px; 
-    align-items: center; 
-}
 
-.total-item { display: flex; gap: 8px; align-items: center; font-size: 0.9rem; }
-.total-label { color: var(--text-muted); text-transform: lowercase; }
-.total-value { font-weight: bold; color: var(--text-primary); font-size: 1.05rem; }
 
 /* ==========================================================================
    8. LOGIN
@@ -3554,6 +3714,64 @@ input:checked + .slider:before { transform: translateX(22px); }
 .license-warning-close-btn:hover {
     background: rgba(0, 0, 0, 0.5);
     transform: scale(1.1);
+}
+
+/* Modo Responsive para Móviles y Android (Texto arriba y Botón abajo) */
+@media (max-width: 768px) {
+    .license-warning-banner {
+        padding: 10px 14px;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+    }
+
+    .license-warning-content {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .license-warning-left {
+        width: 100%;
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .license-warning-icon {
+        font-size: 1.25rem;
+        margin-top: 1px;
+        flex-shrink: 0;
+    }
+
+    .license-warning-text {
+        font-size: 0.84rem;
+        line-height: 1.35;
+        text-align: left;
+        width: 100%;
+        word-break: break-word;
+    }
+
+    .license-warning-right {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .license-warning-btn {
+        flex: 1;
+        justify-content: center;
+        padding: 9px 14px;
+        font-size: 0.84rem;
+        border-radius: 8px;
+    }
+
+    .license-warning-close-btn {
+        flex-shrink: 0;
+        width: 32px;
+        height: 32px;
+        font-size: 1.3rem;
+    }
 }
 
 /* Pantalla de Bloqueo Total (Servicio Suspendido / Vencido) */

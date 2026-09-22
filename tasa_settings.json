@@ -1,10 +1,10 @@
 {
   "oficial": {
     "mode": "automatico",
-    "value": 0
+    "value": 842
   },
   "paralelo": {
     "mode": "manual",
-    "value": 960
+    "value": 980
   }
 }

@@ -9,7 +9,18 @@
         <p style="color: var(--text-muted); padding: 20px; text-align: center;">Cargando historial...</p>
     </div>
 </div>
-<footer>
-    <div class="total-item"><span class="total-label">ventas registradas:</span><span class="total-value" id="totalVentasCount">0</span></div>
-    <div class="total-item"><span class="total-label">ingreso total $:</span><span class="total-value" id="totalVentasUsd">$ 0.00</span></div>
+<footer class="collapsible-footer" id="ventasFooter">
+    <button type="button" class="footer-toggle-btn" id="btnToggleVentasFooter" aria-expanded="false" aria-label="Ver u ocultar totales">
+        <div class="footer-toggle-left">
+            <span class="footer-toggle-icon">▲</span>
+            <span class="footer-toggle-text">Resumen de Ventas</span>
+        </div>
+        <div class="footer-toggle-right">
+            <span class="footer-toggle-badge" id="footerVentasBadge">Total: $0.00</span>
+        </div>
+    </button>
+    <div class="footer-content" id="ventasFooterContent">
+        <div class="total-item"><span class="total-label">ventas registradas:</span><span class="total-value" id="totalVentasCount">0</span></div>
+        <div class="total-item"><span class="total-label">ingreso total $:</span><span class="total-value" id="totalVentasUsd">$ 0.00</span></div>
+    </div>
 </footer>
